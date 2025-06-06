@@ -34,7 +34,8 @@ namespace pRRTC {
     __device__ int solved_iters = 0; // value of iters in the block that solves the problem
     __constant__ pRRTC_settings d_settings;
 
-    constexpr int MAX_GRANULARITY = 256;
+    constexpr int MAX_GRANULARITY = 32;
+    constexpr int MAX_THREADS_PER_BLOCK = 4*MAX_GRANULARITY;
 
     constexpr int BLOCK_SIZE = 64;
     constexpr float UNWRITTEN_VAL = -9999.0f;
@@ -320,9 +321,9 @@ namespace pRRTC {
         __shared__ int t_tree_id; // this tree
         __shared__ int o_tree_id; // the other tree
         __shared__ float config[dim];
-        __shared__ float sdata[MAX_GRANULARITY];
-        __shared__ int sindex[MAX_GRANULARITY];
-        __shared__ unsigned int local_cc_result[1];
+        __shared__ float sdata[MAX_THREADS_PER_BLOCK];
+        __shared__ int sindex[MAX_THREADS_PER_BLOCK];
+        __shared__ volatile unsigned int local_cc_result[1];
         __shared__ float *t_nodes;
         __shared__ float *o_nodes;
         __shared__ int *t_parents;
@@ -334,6 +335,10 @@ namespace pRRTC {
         __shared__ float vec[dim];
         __shared__ unsigned int n_extensions;
         __shared__ bool should_skip;
+        __shared__ volatile float sphere_pos[7800]; // ~assuming max 80 spheres with granularity 32, each has x y z coordinates
+        __shared__ volatile float sphere_pos_approx[1200]; // ~assuming 12 spheres with granularity 32, each has x y z coordinates
+        __shared__ volatile int link_approx_self_CC[640]; //assuming max granularity 32, max number of links 20
+        __shared__ volatile int link_approx_env_CC[640]; //assuming max granularity 32, max number of links 20
 
         int iter = 0;
 
@@ -378,8 +383,23 @@ namespace pRRTC {
                 halton_next(halton_states[bid], (float *)config);
                 Robot::scale_cfg((float *)config);
                 local_cc_result[0] = 0;
+
             }
+
+            // reset link_approx_CC every iteration
+            for (int r=(tid/4)*20+5*(tid%4); r<(tid/4)*20+5*(tid%4)+5; r++){
+                link_approx_self_CC[r]=0;
+                link_approx_env_CC[r]=0;
+            }
+
             __syncthreads();
+
+            // block for testing modified FK and CC (should delete later)
+            //ppln::collision::fk<Robot>(config, sphere_pos, tid);
+            //__syncthreads();
+            //ppln::collision::self_collision_check<Robot>(sphere_pos, tid);
+            //ppln::collision::env_collision_check<Robot>(sphere_pos, env, tid);
+            //__syncthreads();
 
             // parallelized nearest neighbor search
             float local_min_dist = FLT_MAX;
@@ -432,17 +452,75 @@ namespace pRRTC {
                 delta[tid] = (config[tid] - nearest_node[tid]) / (float) d_settings.granularity;
             }
             __syncthreads();
-            
             // validate edge
             float interp_cfg[dim];
             for (int i = 0; i < dim; i++) {
-                interp_cfg[i] = nearest_node[i] + ((tid + 1) * delta[i]);
+                interp_cfg[i] = nearest_node[i] + (int(tid/4 + 1) * delta[i]);
             }
-            bool config_in_collision = not ppln::collision::fkcc<Robot>(interp_cfg, env, tid);
-            atomicOr((unsigned int *)&local_cc_result[0], config_in_collision ? 1u : 0u);
+            
+            //approximate FK & CC first, if collision found then detailed FK & CC
+            int detailed_FK=0;
+            ppln::collision::fk_approx<Robot>(interp_cfg, sphere_pos_approx, tid);
             __syncthreads();
-            bool edge_good = local_cc_result[0] == 0;
+            bool config_in_collision2_approx = not ppln::collision::env_collision_check_approx<Robot>(sphere_pos_approx, link_approx_env_CC, env, tid);
+            atomicOr((unsigned int *)&local_cc_result[0], config_in_collision2_approx ? 1u : 0u);
+            
+            // this section is just for testing approx FK & CC
+            
+            //if (tid==0) {
+                //printf("new round\n");
+                //ppln::collision::fkcc<Robot>(interp_cfg, env, tid);
+            //}
+            __syncthreads();
+            // if collision found in approx env check, proceed to detailed env check
+            if (local_cc_result[0]==1){
+                if (tid==0) local_cc_result[0]=0;
+                __syncthreads();
+                ppln::collision::fk<Robot>(interp_cfg, sphere_pos, tid);
+                detailed_FK=1;
+                __syncthreads();
+                bool config_in_collision2 = not ppln::collision::env_collision_check<Robot>(sphere_pos, link_approx_env_CC, env, tid);
+                atomicOr((unsigned int *)&local_cc_result[0], config_in_collision2 ? 1u : 0u);
+                __syncthreads();
+            }
+            // if env check is collision free, proceed to self-collision check
+            if (local_cc_result[0]==0){
+                bool config_in_collision_approx = not ppln::collision::self_collision_check_approx<Robot>(sphere_pos_approx, link_approx_self_CC, tid);
+                atomicOr((unsigned int *)&local_cc_result[0], config_in_collision_approx ? 1u : 0u);
+                __syncthreads();
+                // if collision found in approx self check, proceed to detailed self check
+                if (local_cc_result[0]==1){
+                    if (tid==0) local_cc_result[0]=0;
+                    __syncthreads();
+                    if (detailed_FK==0){
+                        ppln::collision::fk<Robot>(interp_cfg, sphere_pos, tid);
+                        detailed_FK=1;
+                        __syncthreads();
+                    }
+                    bool config_in_collision = not ppln::collision::self_collision_check<Robot>(sphere_pos, link_approx_self_CC, tid);
+                    atomicOr((unsigned int *)&local_cc_result[0], config_in_collision ? 1u : 0u);
+                    __syncthreads();
+                }
+                //if(blockIdx.x==0) printf("tid %d: env_collision - %d\n", tid, config_in_collision2);
+            }
 
+            // the following check section was originally working correctly
+            // ppln::collision::fk<Robot>(interp_cfg, sphere_pos, tid);
+            //if(blockIdx.x==0) printf("tid %d: %f %f %f\n", tid, interp_cfg[0], interp_cfg[1], interp_cfg[2]);
+            //__syncthreads();
+            //bool config_in_collision2 = not ppln::collision::env_collision_check<Robot>(sphere_pos, env, tid);
+            //atomicOr((unsigned int *)&local_cc_result[0], config_in_collision2 ? 1u : 0u);
+            //if(blockIdx.x==0) printf("tid %d: self_collision - %d\n", tid, config_in_collision);
+            //__syncthreads();
+
+            //if (local_cc_result[0]==0){
+            //    bool config_in_collision = not ppln::collision::self_collision_check<Robot>(sphere_pos, tid);
+            //    atomicOr((unsigned int *)&local_cc_result[0], config_in_collision ? 1u : 0u);
+            //    __syncthreads();
+                //if(blockIdx.x==0) printf("tid %d: env_collision - %d\n", tid, config_in_collision2);
+            //}
+
+            bool edge_good = local_cc_result[0] == 0;
             __syncthreads();
             if (edge_good) {
                 // grow tree
@@ -523,12 +601,53 @@ namespace pRRTC {
                 int extension_parent_idx = index;
                 while (i_extensions < n_extensions) {
                     for (int i = 0; i < dim; i++) {
-                        interp_cfg[i] = config[i] + ((tid + 1) * (vec[i] / (float) d_settings.granularity));
+                        interp_cfg[i] = config[i] + (int(tid/4 + 1) * (vec[i] / (float) d_settings.granularity));
                     }
                     __syncthreads();
-                    bool config_in_collision = not ppln::collision::fkcc<Robot>(interp_cfg, env, tid);
-                    atomicOr((unsigned int *)&local_cc_result[0], config_in_collision ? 1u : 0u);
+                    
+                    //approximate FK & CC first, if collision found then detailed FK & CC
+                    int detailed_FK=0;
+                    ppln::collision::fk_approx<Robot>(interp_cfg, sphere_pos_approx, tid);
                     __syncthreads();
+                    bool config_in_collision2_approx = not ppln::collision::env_collision_check_approx<Robot>(sphere_pos_approx, link_approx_env_CC, env, tid);
+                    atomicOr((unsigned int *)&local_cc_result[0], config_in_collision2_approx ? 1u : 0u);
+                    __syncthreads();
+                    // if collision found in approx env check, proceed to detailed env check
+                    if (local_cc_result[0]==1){
+                        if (tid==0) local_cc_result[0]=0;
+                        __syncthreads();
+                        ppln::collision::fk<Robot>(interp_cfg, sphere_pos, tid);
+                        detailed_FK=1;
+                        __syncthreads();
+                        bool config_in_collision2 = not ppln::collision::env_collision_check<Robot>(sphere_pos, link_approx_env_CC, env, tid);
+                        atomicOr((unsigned int *)&local_cc_result[0], config_in_collision2 ? 1u : 0u);
+                        __syncthreads();
+                    }
+                    //if (tid==0) {
+                        //printf("new round\n");
+                        //ppln::collision::fkcc<Robot>(interp_cfg, env, tid);
+                    //}
+                    // if env check is collision free, proceed to self-collision check
+                    if (local_cc_result[0]==0){
+                        bool config_in_collision_approx = not ppln::collision::self_collision_check_approx<Robot>(sphere_pos_approx, link_approx_self_CC, tid);
+                        atomicOr((unsigned int *)&local_cc_result[0], config_in_collision_approx ? 1u : 0u);
+                        __syncthreads();
+                        // if collision found in approx self check, proceed to detailed self check
+                        if (local_cc_result[0]==1){
+                            if (tid==0) local_cc_result[0]=0;
+                            __syncthreads();
+                            if (detailed_FK==0){
+                                ppln::collision::fk<Robot>(interp_cfg, sphere_pos, tid);
+                                detailed_FK=1;
+                                __syncthreads();
+                            }
+                            bool config_in_collision = not ppln::collision::self_collision_check<Robot>(sphere_pos, link_approx_self_CC, tid);
+                            atomicOr((unsigned int *)&local_cc_result[0], config_in_collision ? 1u : 0u);
+                            __syncthreads();
+                        }
+                        //if(blockIdx.x==0) printf("tid %d: env_collision - %d\n", tid, config_in_collision2);
+                    }
+
                     bool ext_edge_good = local_cc_result[0] == 0;
                     if (!ext_edge_good) break;
                     if (tid == 0) {
@@ -694,7 +813,7 @@ namespace pRRTC {
         res.copy_ns = get_elapsed_nanoseconds(copy_start_time);
 
         auto kernel_start_time = std::chrono::steady_clock::now();
-        rrtc<Robot><<<settings.num_new_configs, settings.granularity>>> (
+        rrtc<Robot><<<settings.num_new_configs, 4*settings.granularity>>> (
             d_nodes,
             d_parents,
             d_radii,
@@ -765,9 +884,9 @@ namespace pRRTC {
         return res;
     }
 
-    template PlannerResult<typename ppln::robots::Sphere> solve<ppln::robots::Sphere>(std::array<float, 3>&, std::vector<std::array<float, 3>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
+    //template PlannerResult<typename ppln::robots::Sphere> solve<ppln::robots::Sphere>(std::array<float, 3>&, std::vector<std::array<float, 3>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
     template PlannerResult<typename ppln::robots::Panda> solve<ppln::robots::Panda>(std::array<float, 7>&, std::vector<std::array<float, 7>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
-    template PlannerResult<typename ppln::robots::Fetch> solve<ppln::robots::Fetch>(std::array<float, 8>&, std::vector<std::array<float, 8>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
-    template PlannerResult<typename ppln::robots::Baxter> solve<ppln::robots::Baxter>(std::array<float, 14>&, std::vector<std::array<float, 14>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
+    //template PlannerResult<typename ppln::robots::Fetch> solve<ppln::robots::Fetch>(std::array<float, 8>&, std::vector<std::array<float, 8>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
+    //template PlannerResult<typename ppln::robots::Baxter> solve<ppln::robots::Baxter>(std::array<float, 14>&, std::vector<std::array<float, 14>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
 
 }
