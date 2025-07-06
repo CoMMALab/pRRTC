@@ -305,7 +305,7 @@ namespace pRRTC {
     
     template <typename Robot>
     __global__ void
-    __launch_bounds__(128, 8)
+    // __launch_bounds__(128, 8)
     rrtc(
         float **nodes,
         int **parents,

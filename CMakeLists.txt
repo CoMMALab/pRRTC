@@ -94,9 +94,10 @@ add_executable(evaluate_mbm
 target_include_directories(evaluate_mbm
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    /mnt/c/Users/Fuqi_Huang/Desktop/vamp/src/impl
+    ${CMAKE_CURRENT_SOURCE_DIR}/extern/vamp/src/impl/vamp
+    ${CMAKE_CURRENT_SOURCE_DIR}/extern/vamp/src/impl
     ${CMAKE_CURRENT_SOURCE_DIR}/build/_deps/nigh-src/src
-    /mnt/c/Users/Fuqi_Huang/Desktop/pRRTC_curoboCCFK/pRRTC/extern/pdqsort
+    ${CMAKE_CURRENT_SOURCE_DIR}/extern/pdqsort
 )
 
 
@@ -124,9 +125,10 @@ add_executable(single_mbm
 target_include_directories(single_mbm
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
-    /mnt/c/Users/Fuqi_Huang/Desktop/vamp/src/impl
+    ${CMAKE_CURRENT_SOURCE_DIR}/extern/vamp/src/impl/vamp
+    ${CMAKE_CURRENT_SOURCE_DIR}/extern/vamp/src/impl
     ${CMAKE_CURRENT_SOURCE_DIR}/build/_deps/nigh-src/src
-    /mnt/c/Users/Fuqi_Huang/Desktop/pRRTC_curoboCCFK/pRRTC/extern/pdqsort
+    ${CMAKE_CURRENT_SOURCE_DIR}/extern/pdqsort
 )
 
 target_link_libraries(single_mbm
