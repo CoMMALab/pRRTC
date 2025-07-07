@@ -11,3 +11,4 @@ plots
 *.csv
 .python-version
 *.sh
+*.ncu-rep

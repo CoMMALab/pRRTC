@@ -633,7 +633,7 @@ namespace ppln::collision {
     }
 
     template <>
-    __device__ __forceinline__ void fk_approx<ppln::robots::Panda>(
+    __device__ void fk_approx<ppln::robots::Panda>(
         const float* q,
         volatile float* sphere_pos_approx, // 32 robots x 12 spheres x 3 coordinates
         float *T, // 32 robots x 4x4 transform matrix
@@ -680,7 +680,7 @@ namespace ppln::collision {
                 T_col[r*4] = dot4(&T_base[r*4], T_step_col);
             }
 
-            __syncthreads();
+            // __syncthreads();
             // if (tid == 0) {
             //     printf("approx i: %d, q[i]: %f, T: %f %f %f %f, %f %f %f %f, %f %f %f %f, %f %f %f %f\n", i, q[i], T_base[0], T_base[1], T_base[2], T_base[3], T_base[4], T_base[5], T_base[6], T_base[7], T_base[8], T_base[9], T_base[10], T_base[11], T_base[12], T_base[13], T_base[14], T_base[15]);
             // }
@@ -710,7 +710,7 @@ namespace ppln::collision {
                 T_col[r*4] = dot4(&T_base[r*4], T_step_col);
             }
 
-            __syncthreads();
+            // __syncthreads();
             // if (tid == 0) {
             //     printf("approx i: %d, T: %f %f %f %f, %f %f %f %f, %f %f %f %f, %f %f %f %f\n", i, T_base[0], T_base[1], T_base[2], T_base[3], T_base[4], T_base[5], T_base[6], T_base[7], T_base[8], T_base[9], T_base[10], T_base[11], T_base[12], T_base[13], T_base[14], T_base[15]);
             // }
@@ -735,7 +735,7 @@ namespace ppln::collision {
     }
 
     template <>
-    __device__ __forceinline__ void fk<ppln::robots::Panda>(
+    __device__ void fk<ppln::robots::Panda>(
         const float* q,
         volatile float* sphere_pos, // 32 robots x 12 spheres x 3 coordinates
         float *T, // 32 robots x 4x4 transform matrix
@@ -781,7 +781,7 @@ namespace ppln::collision {
                 T_col[r*4] = dot4(&T_base[r*4], T_step_col);
             }
 
-            __syncthreads();
+            // __syncthreads();
             // if (tid == 0) {
             //     printf("i: %d, q[i]: %f, T: %f %f %f %f, %f %f %f %f, %f %f %f %f, %f %f %f %f\n", i, q[i], T_base[0], T_base[1], T_base[2], T_base[3], T_base[4], T_base[5], T_base[6], T_base[7], T_base[8], T_base[9], T_base[10], T_base[11], T_base[12], T_base[13], T_base[14], T_base[15]);
             // }
@@ -811,7 +811,7 @@ namespace ppln::collision {
                 T_col[r*4] = dot4(&T_base[r*4], T_step_col);
             }
 
-            __syncthreads();
+            // __syncthreads();
             // if (tid == 0) {
             //     printf("i: %d, T: %f %f %f %f, %f %f %f %f, %f %f %f %f, %f %f %f %f\n", i, T_base[0], T_base[1], T_base[2], T_base[3], T_base[4], T_base[5], T_base[6], T_base[7], T_base[8], T_base[9], T_base[10], T_base[11], T_base[12], T_base[13], T_base[14], T_base[15]);
             // }
@@ -839,7 +839,7 @@ namespace ppln::collision {
 
     // 4 threads per discretized motion for self-collision check
     template <>
-    __device__ __forceinline__ bool self_collision_check_approx<ppln::robots::Panda>(volatile float* sphere_pos_approx, volatile int* link_approx_CC, const int tid){
+    __device__ bool self_collision_check_approx<ppln::robots::Panda>(volatile float* sphere_pos_approx, volatile int* link_approx_CC, const int tid){
         const int thread_ind = tid%4;
         const int batch_ind = tid/4;
 
@@ -862,7 +862,7 @@ namespace ppln::collision {
 
     // 4 threads per discretized motion for self-collision check
     template <>
-    __device__ __forceinline__ bool self_collision_check<ppln::robots::Panda>(volatile float* sphere_pos, volatile int* link_approx_CC, const int tid){
+    __device__ bool self_collision_check<ppln::robots::Panda>(volatile float* sphere_pos, volatile int* link_approx_CC, const int tid){
         const int thread_ind = tid%4;
         const int batch_ind = tid/4;
 
@@ -886,7 +886,7 @@ namespace ppln::collision {
 
     // 4 threads per discretized motion for env collision check
     template <>
-    __device__ __forceinline__ bool env_collision_check<ppln::robots::Panda>(volatile float* sphere_pos, volatile int* link_approx_CC, ppln::collision::Environment<float> *env, const int tid){
+    __device__ bool env_collision_check<ppln::robots::Panda>(volatile float* sphere_pos, volatile int* link_approx_CC, ppln::collision::Environment<float> *env, const int tid){
         const int thread_ind = tid%4;
         const int batch_ind = tid/4;
 
@@ -924,7 +924,7 @@ namespace ppln::collision {
 
     // 4 threads per discretized motion for env collision check
     template <>
-    __device__ __forceinline__ bool env_collision_check_approx<ppln::robots::Panda>(volatile float* sphere_pos_approx, volatile int* link_approx_CC, ppln::collision::Environment<float> *env, const int tid){
+    __device__ bool env_collision_check_approx<ppln::robots::Panda>(volatile float* sphere_pos_approx, volatile int* link_approx_CC, ppln::collision::Environment<float> *env, const int tid){
         const int thread_ind = tid%4;
         const int batch_ind = tid/4;
         bool out=true;
