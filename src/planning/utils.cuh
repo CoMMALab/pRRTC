@@ -632,11 +632,15 @@ namespace ppln::collision {
         return a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
     }
 
+    __device__ __forceinline__ float dot4_col(float *a_col, float *b) {
+        return a_col[0] * b[0] + a_col[M] * b[1] + a_col[M*2] * b[2] + a_col[M*3] * b[3];
+    }
+
     template <>
     __device__ void fk_approx<ppln::robots::Panda>(
         const float* q,
-        volatile float* sphere_pos_approx, // 32 robots x 12 spheres x 3 coordinates
-        float *T, // 32 robots x 4x4 transform matrix
+        volatile float* sphere_pos_approx, // 12 spheres x 32 robots x 3 coordinates (each column is a robot)
+        float *T, // 32 robots x 4x4 transform matrix , column major
         const float *fixed_transforms, // 13 x 4x4 fixed transforms
         const int tid
     ) {
@@ -649,23 +653,22 @@ namespace ppln::collision {
         int T_offset = batch_ind * 16;
         float T_step_col[4]; // 4x1 column of the joint transform matrix for this thread
         float *T_base = T + T_offset; // 4x4 transform matrix for the batch
-        float *T_col = T_base + col_ind; // 4x1 column of the transform matrix for this thread
+        float *T_col = T_base + col_ind*4; // 1x4 column (column major) of the transform matrix for this thread
 
-        #pragma unroll
         for (int r=0; r<4; r++){
-            T_col[r*4] = 0;
+            T_col[r] = 0;
         }
-        T_col[col_ind*4] = 1;
+        T_col[col_ind] = 1;
 
         // base link
         if (col_ind==0){
-            sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+0] = 0;
-            sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+1] = 0;
-            sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+2] = 0.5;
+            // sphere 0, robot batch_ind
+            sphere_pos_approx[batch_ind * 3+0] = 0;
+            sphere_pos_approx[batch_ind * 3+1] = 0;
+            sphere_pos_approx[batch_ind * 3+2] = 0.5;
         }
         transformed_sphere_ind++;
 
-        #pragma unroll
         for (int i = 0; i < 9; ++i) {
             int ft_addr_start = (i + 1) * 16;
             if (i < 7) {
@@ -675,9 +678,8 @@ namespace ppln::collision {
                 fixed_joint_fn(&fixed_transforms[ft_addr_start + col_ind], T_step_col);
             }
 
-            #pragma unroll 4
             for (int r=0; r<4; r++){
-                T_col[r*4] = dot4(&T_base[r*4], T_step_col);
+                T_col[r] = dot4_col(&T_base[r], T_step_col);
             }
 
             // __syncthreads();
@@ -687,27 +689,26 @@ namespace ppln::collision {
 
             while (panda_approx_link_index[transformed_sphere_ind]==i+1) {
                 if (col_ind < 3) {
-                    sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3 + transformed_sphere_ind * 3 + col_ind] = 
-                        T_base[col_ind*4 + 0] * panda_approx_local_xyz[transformed_sphere_ind].x +
-                        T_base[col_ind*4 + 1] * panda_approx_local_xyz[transformed_sphere_ind].y +
-                        T_base[col_ind*4 + 2] * panda_approx_local_xyz[transformed_sphere_ind].z +
-                        T_base[col_ind*4 + 3];
+                    // sphere transformed_sphere_ind, robot batch_ind (16 robots), coord col_ind
+                    sphere_pos_approx[transformed_sphere_ind * 16 * 3 + batch_ind * 3 + col_ind] = 
+                        T_base[col_ind] * panda_approx_local_xyz[transformed_sphere_ind].x +
+                        T_base[col_ind + M] * panda_approx_local_xyz[transformed_sphere_ind].y +
+                        T_base[col_ind + M*2] * panda_approx_local_xyz[transformed_sphere_ind].z +
+                        T_base[col_ind + M*3];
                 }
                 transformed_sphere_ind++;
             }
         }
         // left, right finger
-        #pragma unroll
         for (int i = 9; i < 12; i++) {
             int ft_addr_start = (i + 1) * 16;
             fixed_joint_fn(&fixed_transforms[ft_addr_start + col_ind], T_step_col);
             
             // for these joints, we don't want to update T_base, so we need to save the old value
             float old_T_col[4];
-            #pragma unroll 4
             for (int r=0; r<4; r++){
-                old_T_col[r] = T_col[r*4];
-                T_col[r*4] = dot4(&T_base[r*4], T_step_col);
+                old_T_col[r] = T_col[r];
+                T_col[r] = dot4_col(&T_base[r], T_step_col);
             }
 
             // __syncthreads();
@@ -717,19 +718,19 @@ namespace ppln::collision {
 
             while (transformed_sphere_ind < PANDA_APPROX_SPHERE_COUNT && panda_approx_link_index[transformed_sphere_ind] == i + 1){
                 if (col_ind < 3){
-                    sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3 + transformed_sphere_ind * 3 + col_ind] = 
-                        T_base[col_ind*4 + 0] * panda_approx_local_xyz[transformed_sphere_ind].x +
-                        T_base[col_ind*4 + 1] * panda_approx_local_xyz[transformed_sphere_ind].y +
-                        T_base[col_ind*4 + 2] * panda_approx_local_xyz[transformed_sphere_ind].z +
-                        T_base[col_ind*4 + 3];
+                    // sphere transformed_sphere_ind, robot batch_ind (16 robots), coord col_ind
+                    sphere_pos_approx[transformed_sphere_ind * 16 * 3 + batch_ind * 3 + col_ind] = 
+                        T_base[col_ind] * panda_approx_local_xyz[transformed_sphere_ind].x +
+                        T_base[col_ind + M] * panda_approx_local_xyz[transformed_sphere_ind].y +
+                        T_base[col_ind + M*2] * panda_approx_local_xyz[transformed_sphere_ind].z +
+                        T_base[col_ind + M*3];
                 }
                 transformed_sphere_ind++;
             }
 
             // restore T_col
-            #pragma unroll 4
             for (int r=0; r<4; r++){
-                T_col[r*4] = old_T_col[r];
+                T_col[r] = old_T_col[r];
             }
         }
     }
@@ -751,22 +752,21 @@ namespace ppln::collision {
         int T_offset = batch_ind * 16;
         float T_step_col[4]; // 4x1 column of the joint transform matrix for this thread
         float *T_base = T + T_offset; // 4x4 transform matrix for the batch
-        float *T_col = T_base + col_ind; // 4x1 column of the transform matrix for this thread
+        float *T_col = T_base + col_ind*4; // 1x4 column (column major) of the transform matrix for this thread
 
-        #pragma unroll
         for (int r=0; r<4; r++){
-            T_col[r*4] = 0;
+            T_col[r] = 0;
         }
-        T_col[col_ind*4] = 1;
+        T_col[col_ind] = 1;
 
         if (col_ind==0){
-            sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+0] = 0;
-            sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+1] = 0;
-            sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+2] = 0.5;
+            // sphere 0, robot batch_ind
+            sphere_pos[batch_ind * 3 + 0] = 0;
+            sphere_pos[batch_ind * 3 + 1] = 0;
+            sphere_pos[batch_ind * 3 + 2] = 0.5;
         }
         transformed_sphere_ind++;
 
-        #pragma unroll
         for (int i = 0; i < 9; ++i) {
             int ft_addr_start = (i + 1) * 16;
             if (i < 7) {
@@ -776,9 +776,8 @@ namespace ppln::collision {
                 fixed_joint_fn(&fixed_transforms[ft_addr_start + col_ind], T_step_col);
             }
 
-            #pragma unroll 4
             for (int r=0; r<4; r++){
-                T_col[r*4] = dot4(&T_base[r*4], T_step_col);
+                T_col[r] = dot4_col(&T_base[r], T_step_col);
             }
 
             // __syncthreads();
@@ -788,11 +787,12 @@ namespace ppln::collision {
 
             while (panda_link_index[transformed_sphere_ind]==i+1) {
                 if (col_ind < 3) {
-                    sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3 + transformed_sphere_ind * 3 + col_ind] = 
-                        T_base[col_ind*4 + 0] * panda_local_xyz[transformed_sphere_ind].x +
-                        T_base[col_ind*4 + 1] * panda_local_xyz[transformed_sphere_ind].y +
-                        T_base[col_ind*4 + 2] * panda_local_xyz[transformed_sphere_ind].z +
-                        T_base[col_ind*4 + 3];
+                    // sphere transformed_sphere_ind, robot batch_ind (16 robots), coord col_ind
+                    sphere_pos[transformed_sphere_ind * 16 * 3 + batch_ind * 3 + col_ind] = 
+                        T_base[col_ind] * panda_local_xyz[transformed_sphere_ind].x +
+                        T_base[col_ind + M] * panda_local_xyz[transformed_sphere_ind].y +
+                        T_base[col_ind + M*2] * panda_local_xyz[transformed_sphere_ind].z +
+                        T_base[col_ind + M*3];
                 }
                 transformed_sphere_ind++;
             }
@@ -805,10 +805,9 @@ namespace ppln::collision {
             
             // for these joints, we don't want to update T_base, so we need to save the old value
             float old_T_col[4];
-            #pragma unroll 4
             for (int r=0; r<4; r++){
-                old_T_col[r] = T_col[r*4];
-                T_col[r*4] = dot4(&T_base[r*4], T_step_col);
+                old_T_col[r] = T_col[r];
+                T_col[r] = dot4_col(&T_base[r], T_step_col);
             }
 
             // __syncthreads();
@@ -818,19 +817,19 @@ namespace ppln::collision {
 
             while (transformed_sphere_ind < PANDA_SPHERE_COUNT && panda_link_index[transformed_sphere_ind] == i + 1){
                 if (col_ind < 3){
-                    sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3 + transformed_sphere_ind * 3 + col_ind] = 
-                        T_base[col_ind*4 + 0] * panda_local_xyz[transformed_sphere_ind].x +
-                        T_base[col_ind*4 + 1] * panda_local_xyz[transformed_sphere_ind].y +
-                        T_base[col_ind*4 + 2] * panda_local_xyz[transformed_sphere_ind].z +
-                        T_base[col_ind*4 + 3];
+                    // sphere transformed_sphere_ind, robot batch_ind (16 robots), coord col_ind
+                    sphere_pos[transformed_sphere_ind * 16 * 3 + batch_ind * 3 + col_ind] = 
+                        T_base[col_ind] * panda_local_xyz[transformed_sphere_ind].x +
+                        T_base[col_ind + M] * panda_local_xyz[transformed_sphere_ind].y +
+                        T_base[col_ind + M*2] * panda_local_xyz[transformed_sphere_ind].z +
+                        T_base[col_ind + M*3];
                 }
                 transformed_sphere_ind++;
             }
 
             // restore T_col
-            #pragma unroll 4
             for (int r=0; r<4; r++){
-                T_col[r*4] = old_T_col[r];
+                T_col[r] = old_T_col[r];
             }
         }
     }
@@ -845,10 +844,12 @@ namespace ppln::collision {
 
         #pragma unroll
         for (int i=thread_ind; i<PANDA_APPROX_SPHERE_COUNT; i+=4){
-            float check_sphere[3] = {sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+ i*3], sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3 + i*3+1], sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3 + i*3+2]};
+            // sphere i, robot batch_ind (16 robots)
+            float check_sphere[3] = {sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 0], sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 1], sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 2]};
             for (int j=panda_approx_startCC_ind[i]; j<PANDA_APPROX_SPHERE_COUNT; j++){
                 //if (panda_link_index[i]==2 && panda_link_index[j]==6) continue;
-                float check_pos[3] = {sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+j*3], sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+j*3+1], sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+j*3+2]};
+                // sphere j, robot batch_ind (16 robots)
+                float check_pos[3] = {sphere_pos_approx[j * 16 * 3 + batch_ind * 3 + 0], sphere_pos_approx[j * 16 * 3 + batch_ind * 3 + 1], sphere_pos_approx[j * 16 * 3 + batch_ind * 3 + 2]};
                 if (sphere_sphere_self_collision(check_sphere[0], check_sphere[1], check_sphere[2], panda_approx_local_xyz[i].w, check_pos[0], check_pos[1], check_pos[2], panda_approx_local_xyz[j].w)){ 
                     //if (batch_ind==0) printf("self-collision approx: sphere_ind %d %d, coord %f %f %f, %f %f %f\n", i, j, check_sphere[0], check_sphere[1], check_sphere[2], check_pos[0], check_pos[1], check_pos[2]);
                     atomicAdd((int*)&link_approx_CC[20*batch_ind +panda_approx_link_index[i]], 1);
@@ -871,11 +872,13 @@ namespace ppln::collision {
         #pragma unroll
         for (int i=thread_ind; i<PANDA_STOP_SELF_CC; i+=4){
             if (link_approx_CC[20*batch_ind +panda_link_index[i]]==0) continue;
-            float check_sphere[3] = {sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+ i*3], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3 + i*3+1], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3 + i*3+2]};
+            // sphere i, robot batch_ind (16 robots)
+            float check_sphere[3] = {sphere_pos[i * 16 * 3 + batch_ind * 3 + 0], sphere_pos[i * 16 * 3 + batch_ind * 3 + 1], sphere_pos[i * 16 * 3 + batch_ind * 3 + 2]};
             
             for (int j=panda_startCC_ind[i]; j<PANDA_SPHERE_COUNT; j++){
                 //if (panda_link_index[i]==2 && panda_link_index[j]==6) continue;
-                float check_pos[3] = {sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+j*3], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+j*3+1], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+j*3+2]};
+                // sphere j, robot batch_ind (16 robots)
+                float check_pos[3] = {sphere_pos[j * 16 * 3 + batch_ind * 3 + 0], sphere_pos[j * 16 * 3 + batch_ind * 3 + 1], sphere_pos[j * 16 * 3 + batch_ind * 3 + 2]};
                 if (sphere_sphere_self_collision(check_sphere[0], check_sphere[1], check_sphere[2], panda_local_xyz[i].w, check_pos[0], check_pos[1], check_pos[2], panda_local_xyz[j].w)){ 
                     return false;
                 }
@@ -895,7 +898,8 @@ namespace ppln::collision {
         #pragma unroll
         // int i=PANDA_SPHERE_COUNT/4*thread_ind; i<PANDA_SPHERE_COUNT/4*(thread_ind+1); i++
         for (int i=thread_ind; i<PANDA_SPHERE_COUNT; i+=4){
-            if (link_approx_CC[20*batch_ind +panda_link_index[i]]>0 && sphere_environment_in_collision(env, sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3+1], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3+2], panda_local_xyz[i].w)){
+            // sphere i, robot batch_ind (16 robots)
+            if (link_approx_CC[20*batch_ind +panda_link_index[i]]>0 && sphere_environment_in_collision(env, sphere_pos[i * 16 * 3 + batch_ind * 3 + 0], sphere_pos[i * 16 * 3 + batch_ind * 3 + 1], sphere_pos[i * 16 * 3 + batch_ind * 3 + 2], panda_local_xyz[i].w)){
                 return false;
             } 
         }
@@ -932,14 +936,15 @@ namespace ppln::collision {
         
         #pragma unroll
         for (int i=PANDA_APPROX_SPHERE_COUNT/4*thread_ind; i<PANDA_APPROX_SPHERE_COUNT/4*(thread_ind+1); i++){
-            if (sphere_environment_in_collision(env, sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+i*3], sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+i*3+1], sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+i*3+2], panda_approx_local_xyz[i].w)){
+            // sphere i, robot batch_ind (16 robots)
+            if (sphere_environment_in_collision(env, sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 0], sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 1], sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 2], panda_approx_local_xyz[i].w)){
                 atomicAdd((int*)&link_approx_CC[20*batch_ind +panda_approx_link_index[i]],1);
                 out=false;
             } 
         }
 
         int i = PANDA_APPROX_SPHERE_COUNT-1-thread_ind;
-        if (sphere_environment_in_collision(env, sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+i*3], sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+i*3+1], sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+i*3+2], panda_approx_local_xyz[i].w)){
+        if (sphere_environment_in_collision(env, sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 0], sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 1], sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 2], panda_approx_local_xyz[i].w)){
             atomicAdd((int*)&link_approx_CC[20*batch_ind +panda_approx_link_index[i]],1);
             out=false;
         }

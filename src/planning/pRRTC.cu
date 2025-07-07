@@ -338,7 +338,7 @@ namespace pRRTC {
         __align__(16) __shared__ volatile float sphere_pos[7800]; // ~assuming max 80 spheres with granularity 32, each has x y z coordinates
         // __shared__ volatile float sphere_pos_approx[1200]; // ~assuming 12 spheres with granularity 32, each has x y z coordinates
         __align__(16) __shared__ volatile int link_CC[640]; //assuming max granularity 32, max number of links 20
-        __align__(16) __shared__ float T[32 * 16]; // 16 robots x 4x4 transform matrix
+        __align__(16) __shared__ float T[16 * 16]; // 16 robots x 4x4 transform matrix
 
         int iter = 0;
 
@@ -401,13 +401,6 @@ namespace pRRTC {
             }
 
             __syncthreads();
-
-            // block for testing modified FK and CC (should delete later)
-            //ppln::collision::fk<Robot>(config, sphere_pos, tid);
-            //__syncthreads();
-            //ppln::collision::self_collision_check<Robot>(sphere_pos, tid);
-            //ppln::collision::env_collision_check<Robot>(sphere_pos, env, tid);
-            //__syncthreads();
 
             // parallelized nearest neighbor search
             float local_min_dist = FLT_MAX;
@@ -477,12 +470,6 @@ namespace pRRTC {
             bool config_in_collision2_approx = not ppln::collision::env_collision_check_approx<Robot>(sphere_pos, link_CC, env, tid);
             atomicOr((unsigned int *)&local_cc_result[0], config_in_collision2_approx ? 1u : 0u);
             
-            // this section is just for testing approx FK & CC
-            
-            //if (tid==0) {
-                //printf("new round\n");
-                //ppln::collision::fkcc<Robot>(interp_cfg, env, tid);
-            //}
             __syncthreads();
             // if collision found in approx env check, proceed to detailed env check
             if (local_cc_result[0]==1){
@@ -521,22 +508,6 @@ namespace pRRTC {
                 }
                 //if(blockIdx.x==0) printf("tid %d: env_collision - %d\n", tid, config_in_collision2);
             }
-
-            // the following check section was originally working correctly
-            // ppln::collision::fk<Robot>(interp_cfg, sphere_pos, tid);
-            //if(blockIdx.x==0) printf("tid %d: %f %f %f\n", tid, interp_cfg[0], interp_cfg[1], interp_cfg[2]);
-            //__syncthreads();
-            //bool config_in_collision2 = not ppln::collision::env_collision_check<Robot>(sphere_pos, env, tid);
-            //atomicOr((unsigned int *)&local_cc_result[0], config_in_collision2 ? 1u : 0u);
-            //if(blockIdx.x==0) printf("tid %d: self_collision - %d\n", tid, config_in_collision);
-            //__syncthreads();
-
-            //if (local_cc_result[0]==0){
-            //    bool config_in_collision = not ppln::collision::self_collision_check<Robot>(sphere_pos, tid);
-            //    atomicOr((unsigned int *)&local_cc_result[0], config_in_collision ? 1u : 0u);
-            //    __syncthreads();
-                //if(blockIdx.x==0) printf("tid %d: env_collision - %d\n", tid, config_in_collision2);
-            //}
 
             bool edge_good = local_cc_result[0] == 0;
             __syncthreads();
