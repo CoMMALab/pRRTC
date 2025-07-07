@@ -11,6 +11,7 @@
 #include <cassert>
 
 /* All device utils and collision functions */
+#define M 4
 
 namespace ppln::device_utils {
     using namespace collision;
@@ -470,7 +471,7 @@ namespace ppln::collision {
     // cc returns false if the config does collide with an obstacle, returns true if the config does not collide
 
     template <typename Robot>
-    __device__ __forceinline__ void fk(const float *config, volatile float* sphere_pos, const int tid);
+    __device__ __forceinline__ void fk(const float *config, volatile float* sphere_pos, float *T, const float *fixed_transforms, const int tid);
 
     template <typename Robot>
     __device__ __forceinline__ bool self_collision_check(volatile float* sphere_pos, volatile int* link_approx_CC, const int tid);
@@ -478,8 +479,8 @@ namespace ppln::collision {
     template <typename Robot>
     __device__ __forceinline__ bool env_collision_check(volatile float* sphere_pos, volatile int* link_approx_CC, ppln::collision::Environment<float> *env, const int tid);
 
-     template <typename Robot>
-    __device__ __forceinline__ void fk_approx(const float *config, volatile float* sphere_pos_approx, const int tid);
+    template <typename Robot>
+    __device__ __forceinline__ void fk_approx(const float *config, volatile float* sphere_pos_approx, float *T, const float *fixed_transforms, const int tid);
 
     template <typename Robot>
     __device__ __forceinline__ bool self_collision_check_approx(volatile float* sphere_pos_approx, volatile int* link_approx_CC, const int tid);
@@ -501,81 +502,163 @@ namespace ppln::collision {
         }
     }
 
-    __device__ __forceinline__ void make_transform(float x, float y, float z, float roll, float pitch, float yaw, float T[4][4]) {
+    __device__ __constant__ float panda_fixed_transforms[] = {
+        // Link 0
+        1.000000, 0.000000, 0.000000, 0.000000,
+        0.000000, 1.000000, 0.000000, 0.000000,
+        0.000000, 0.000000, 1.000000, 0.000000,
+        0.000000, 0.000000, 0.000000, 1.000000,
+
+        // Link 1
+        1.000000, 0.000000, 0.000000, 0.000000,
+        0.000000, 1.000000, 0.000000, 0.000000,
+        0.000000, 0.000000, 1.000000, 0.333000,
+        0.000000, 0.000000, 0.000000, 1.000000,
         
-        float R[4][4];
-        for (int r=0; r<4; r++){
-            for (int c=0; c<4; c++){
-                R[r][c] = (r==c);
-            }
-        }
-        R[0][3] = x;
-        R[1][3] = y;
-        R[2][3] = z;
+        // Link 2
+        1.000000, 0.000000, 0.000000, 0.000000,
+        0.000000, 0.000000, 1.000000, 0.000000,
+        0.000000, -1.000000, 0.000000, 0.000000,
+        0.000000, 0.000000, 0.000000, 1.000000,
+        
+        // Link 3
+        1.000000, 0.000000, 0.000000, 0.000000,
+        0.000000, 0.000000, -1.000000, -0.316000,
+        0.000000, 1.000000, 0.000000, 0.000000,
+        0.000000, 0.000000, 0.000000, 1.000000,
 
-        float cr = cosf(roll), sr = sinf(roll);
-        float cp = cosf(pitch), sp = sinf(pitch);
-        float cy = cosf(yaw), sy = sinf(yaw);
+        // Link 4
+        1.000000, 0.000000, 0.000000, 0.082500,
+        0.000000, 0.000000, -1.000000, 0.000000,
+        0.000000, 1.000000, 0.000000, 0.000000,
+        0.000000, 0.000000, 0.000000, 1.000000,
 
-        // Rotation matrix R = Rz(yaw) * Ry(pitch) * Rx(roll)
-        // (This matches standard ROS URDF / REP-103 convention: extrinsic ZYX)
+        // Link 5
+        1.000000, 0.000000, 0.000000, -0.082500,
+        0.000000, 0.000000, 1.000000, 0.384000,
+        0.000000, -1.000000, 0.000000, 0.000000,
+        0.000000, 0.000000, 0.000000, 1.000000,
 
-        if (roll!=0){
-            float R2[4][4]={
-                {1, 0, 0, 0},
-                {0, cr, -sr, 0},
-                {0, sr, cr, 0},
-                {0, 0, 0, 1}
-            };
-            matmul(R, R2, T);
-        }
-        else if(yaw!=0){
-            float R2[4][4]={
-                {cy, -sy, 0, 0},
-                {sy, cy, 0, 0},
-                {0, 0, 1, 0},
-                {0, 0, 0, 1}
-            };
-            matmul(R, R2, T);
-        }
-        else{
-            float R2[4][4]={
-                {1, 0, 0, 0},
-                {0, 1, 0, 0},
-                {0, 0, 1, 0},
-                {0, 0, 0, 1}
-            };
-            matmul(R, R2, T);
-        }
+        // Link 6
+        1.000000, 0.000000, 0.000000, 0.000000,
+        0.000000, 0.000000, -1.000000, 0.000000,
+        0.000000, 1.000000, 0.000000, 0.000000,
+        0.000000, 0.000000, 0.000000, 1.000000,
 
+        // Link 7
+        1.000000, 0.000000, 0.000000, 0.088000,
+        0.000000, 0.000000, -1.000000, 0.000000,
+        0.000000, 1.000000, 0.000000, 0.000000,
+        0.000000, 0.000000, 0.000000, 1.000000,
+
+        // Link 8
+        1.000000, 0.000000, 0.000000, 0.000000,
+        0.000000, 1.000000, 0.000000, 0.000000,
+        0.000000, 0.000000, 1.000000, 0.107000,
+        0.000000, 0.000000, 0.000000, 1.000000,
+
+        // Link 9
+        0.707107, 0.707107, 0.000000, 0.000000,
+        -0.707107, 0.707107, 0.000000, 0.000000,
+        0.000000, 0.000000, 1.000000, 0.000000,
+        0.000000, 0.000000, 0.000000, 1.000000,
+
+        // Link 10
+        1.000000, -0.000000, -0.000000, 0.000000,
+        0.000000, 1.000000, 0.000000, 0.065000,
+        0.000000, -0.000000, 1.000000, 0.058400,
+        0.000000, 0.000000, 0.000000, 1.000000,
+
+        // Link 11
+        1.000000, -0.000000, -0.000000, -0.000000,
+        0.000000, 1.000000, 0.000000, -0.065000,
+        0.000000, -0.000000, 1.000000, 0.058400,
+        0.000000, 0.000000, 0.000000, 1.000000,
+
+        // Link 12
+        1.000000, 0.000000, 0.000000, 0.000000,
+        0.000000, 1.000000, 0.000000, 0.000000,
+        0.000000, 0.000000, 1.000000, 0.105000,
+        0.000000, 0.000000, 0.000000, 1.000000
+    };
+
+    __device__ __forceinline__ void fixed_joint_fn(
+        const float *fixed_transform,
+        float *T_step_col
+    )
+    {
+        T_step_col[0] = fixed_transform[0];
+        T_step_col[1] = fixed_transform[M];
+        T_step_col[2] = fixed_transform[M * 2];
+        T_step_col[3] = fixed_transform[M * 3];
+    }
+    
+    __device__ __forceinline__ void zrot_fn(
+        const float *fixed_transforms,
+        const float angle,
+        const int col_idx,
+        float *T_step_col
+    ) {
+        float cos = __cosf(angle);
+        float sin = __sinf(angle);
+        float n_sin = -1 * sin;
+
+        int col_idx_by_2 =
+            col_idx / 2; // first two threads will be 0 and the next two will be 1.
+        int col_idx_per_2 =
+            col_idx % 2; // first thread will be 0 and the second thread will be 1.
+        float f1 = (1 - col_idx_per_2) * cos +
+                   col_idx_per_2 * n_sin; // thread 0 get cos , thread 1 gets n_sin
+        float f2 = (1 - col_idx_per_2) * sin +
+                   col_idx_per_2 * cos; // thread 0 get sin, thread 1 gets cos
+
+        f1 = (1 - col_idx_by_2) * f1 +
+             col_idx_by_2 * 1; // first two threads get f1, other two threads get 1
+        f2 = (1 - col_idx_by_2) *
+             f2; // first two threads get f2, other two threads get 0.0
+
+        int addr_offset =
+            col_idx_by_2 *
+            col_idx; // first 2 threads will get 0, the other two will get col_idx.
+
+        T_step_col[0] = fixed_transforms[0 + addr_offset] * f1 + f2 * fixed_transforms[1];
+        T_step_col[1] = fixed_transforms[M + addr_offset] * f1 + f2 * fixed_transforms[M + 1];
+        T_step_col[2] = fixed_transforms[M + M + addr_offset] * f1 + f2 * fixed_transforms[M + M + 1];
+        T_step_col[3] = fixed_transforms[M + M + M + addr_offset] * col_idx_by_2; // first two threads get 0.0, remaining two get fixed_transforms[3M];
+    }
+    
+    __device__ __forceinline__ float dot4(float *a, float *b)
+    {
+        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2] + a[3] * b[3];
     }
 
     template <>
-    __device__ __forceinline__ void fk_approx<ppln::robots::Panda>(const float* q, volatile float* sphere_pos_approx, const int tid) {
-        const int row_ind = tid%4;
+    __device__ __forceinline__ void fk_approx<ppln::robots::Panda>(
+        const float* q,
+        volatile float* sphere_pos_approx, // 32 robots x 12 spheres x 3 coordinates
+        float *T, // 32 robots x 4x4 transform matrix
+        const float *fixed_transforms, // 13 x 4x4 fixed transforms
+        const int tid
+    ) {
+        // every 4 threads are responsible for one column of the transform matrix T
+        // make_transform will calculate the necessary column of T_step needed for the thread
+        const int col_ind = tid%4;
         const int batch_ind = tid/4;
-        int transformed_sphere_ind=0;
+        int transformed_sphere_ind = 0;
 
-        float T_step[4][4];
-        float T[4][4];
+        int T_offset = batch_ind * 16;
+        float T_step_col[4]; // 4x1 column of the joint transform matrix for this thread
+        float *T_base = T + T_offset; // 4x4 transform matrix for the batch
+        float *T_col = T_base + col_ind; // 4x1 column of the transform matrix for this thread
 
-        const float joint_xyz[12][3] = {
-            {0, 0, 0.333}, {0, 0, 0}, {0, -0.316, 0}, {0.0825, 0, 0},
-            {-0.0825, 0.384, 0}, {0, 0, 0}, {0.088, 0, 0}, {0, 0, 0.107},
-            {0, 0, 0}, {0, 0.065, 0.0584}, {0, -0.065, 0.0584}, {0, 0, 0.105}
-        };
-
-        const float joint_rpy[12][3] = {
-            {0, 0, 0}, {-1.5708f, 0, 0}, {1.5708f, 0, 0}, {1.5708f, 0, 0},
-            {-1.5708f, 0, 0}, {1.5708f, 0, 0}, {1.5708f, 0, 0}, {0, 0, 0},
-            {0, 0, -0.7854f}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
-        };
-
-        for (int c=0; c<4; c++){
-            T[row_ind][c] = (c==row_ind);
+        #pragma unroll
+        for (int r=0; r<4; r++){
+            T_col[r*4] = 0;
         }
+        T_col[col_ind*4] = 1;
 
-        if (row_ind==0){
+        // base link
+        if (col_ind==0){
             sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+0] = 0;
             sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+1] = 0;
             sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3+2] = 0.5;
@@ -584,98 +667,99 @@ namespace ppln::collision {
 
         #pragma unroll
         for (int i = 0; i < 9; ++i) {
-
-            make_transform(joint_xyz[i][0], joint_xyz[i][1], joint_xyz[i][2],
-                        joint_rpy[i][0], joint_rpy[i][1], joint_rpy[i][2], T_step);
-            
-            float temp[4]={0, 0, 0, 0};
-            for (int c=0; c<4; c++){
-                for (int k=0; k<4; k++){
-                    temp[c] += T[row_ind][k] * T_step[k][c];
-                }
-                
-            }
-            for (int c=0; c<4; c++){
-                T[row_ind][c] = temp[c];
-            }
-
+            int ft_addr_start = (i + 1) * 16;
             if (i < 7) {
-                float c = cosf(q[i]), s = sinf(q[i]);
-                float R[4][4] = {
-                    {c, -s, 0, 0},
-                    {s,  c, 0, 0},
-                    {0,  0, 1, 0},
-                    {0,  0, 0, 1}
-                };
-
-                for (int c=0; c<4; c++){
-                    temp[c] = 0;
-                    for (int k=0; k<4; k++){
-                        temp[c] += T[row_ind][k] * R[k][c];
-                    }
-                }
-                
-                for (int c=0; c<4; c++){
-                    T[row_ind][c] = temp[c];
-                }
+                zrot_fn(&fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
+            }
+            else {
+                fixed_joint_fn(&fixed_transforms[ft_addr_start + col_ind], T_step_col);
             }
 
-            while (panda_approx_link_index[transformed_sphere_ind]==i+1){
-                if (row_ind<3){
-                    sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3 + transformed_sphere_ind * 3 + row_ind] = T[row_ind][0]*panda_approx_local_xyz[transformed_sphere_ind].x + T[row_ind][1]*panda_approx_local_xyz[transformed_sphere_ind].y + T[row_ind][2]*panda_approx_local_xyz[transformed_sphere_ind].z + T[row_ind][3];
+            #pragma unroll 4
+            for (int r=0; r<4; r++){
+                T_col[r*4] = dot4(&T_base[r*4], T_step_col);
+            }
+
+            __syncthreads();
+            // if (tid == 0) {
+            //     printf("approx i: %d, q[i]: %f, T: %f %f %f %f, %f %f %f %f, %f %f %f %f, %f %f %f %f\n", i, q[i], T_base[0], T_base[1], T_base[2], T_base[3], T_base[4], T_base[5], T_base[6], T_base[7], T_base[8], T_base[9], T_base[10], T_base[11], T_base[12], T_base[13], T_base[14], T_base[15]);
+            // }
+
+            while (panda_approx_link_index[transformed_sphere_ind]==i+1) {
+                if (col_ind < 3) {
+                    sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3 + transformed_sphere_ind * 3 + col_ind] = 
+                        T_base[col_ind*4 + 0] * panda_approx_local_xyz[transformed_sphere_ind].x +
+                        T_base[col_ind*4 + 1] * panda_approx_local_xyz[transformed_sphere_ind].y +
+                        T_base[col_ind*4 + 2] * panda_approx_local_xyz[transformed_sphere_ind].z +
+                        T_base[col_ind*4 + 3];
                 }
                 transformed_sphere_ind++;
             }
         }
         // left, right finger
         #pragma unroll
-        for (int i=9; i<12; i++){
-            make_transform(joint_xyz[i][0], joint_xyz[i][1], joint_xyz[i][2],
-                        joint_rpy[i][0], joint_rpy[i][1], joint_rpy[i][2], T_step);
+        for (int i = 9; i < 12; i++) {
+            int ft_addr_start = (i + 1) * 16;
+            fixed_joint_fn(&fixed_transforms[ft_addr_start + col_ind], T_step_col);
             
-            float temp[4]={0, 0, 0, 0};
-            for (int c=0; c<4; c++){
-                for (int k=0; k<4; k++){
-                    temp[c] += T[row_ind][k] * T_step[k][c];
-                }
+            // for these joints, we don't want to update T_base, so we need to save the old value
+            float old_T_col[4];
+            #pragma unroll 4
+            for (int r=0; r<4; r++){
+                old_T_col[r] = T_col[r*4];
+                T_col[r*4] = dot4(&T_base[r*4], T_step_col);
             }
 
-            while (transformed_sphere_ind<PANDA_APPROX_SPHERE_COUNT && panda_approx_link_index[transformed_sphere_ind]==i+1){
-                if (row_ind<3){
-                    sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3 + transformed_sphere_ind * 3 + row_ind] = temp[0]*panda_approx_local_xyz[transformed_sphere_ind].x + temp[1]*panda_approx_local_xyz[transformed_sphere_ind].y + temp[2]*panda_approx_local_xyz[transformed_sphere_ind].z + temp[3];
+            __syncthreads();
+            // if (tid == 0) {
+            //     printf("approx i: %d, T: %f %f %f %f, %f %f %f %f, %f %f %f %f, %f %f %f %f\n", i, T_base[0], T_base[1], T_base[2], T_base[3], T_base[4], T_base[5], T_base[6], T_base[7], T_base[8], T_base[9], T_base[10], T_base[11], T_base[12], T_base[13], T_base[14], T_base[15]);
+            // }
+
+            while (transformed_sphere_ind < PANDA_APPROX_SPHERE_COUNT && panda_approx_link_index[transformed_sphere_ind] == i + 1){
+                if (col_ind < 3){
+                    sphere_pos_approx[batch_ind * PANDA_APPROX_SPHERE_COUNT * 3 + transformed_sphere_ind * 3 + col_ind] = 
+                        T_base[col_ind*4 + 0] * panda_approx_local_xyz[transformed_sphere_ind].x +
+                        T_base[col_ind*4 + 1] * panda_approx_local_xyz[transformed_sphere_ind].y +
+                        T_base[col_ind*4 + 2] * panda_approx_local_xyz[transformed_sphere_ind].z +
+                        T_base[col_ind*4 + 3];
                 }
                 transformed_sphere_ind++;
+            }
+
+            // restore T_col
+            #pragma unroll 4
+            for (int r=0; r<4; r++){
+                T_col[r*4] = old_T_col[r];
             }
         }
     }
 
     template <>
-    __device__ __forceinline__ void fk<ppln::robots::Panda>(const float* q, volatile float* sphere_pos, const int tid) {
-        
-        const int row_ind = tid%4;
+    __device__ __forceinline__ void fk<ppln::robots::Panda>(
+        const float* q,
+        volatile float* sphere_pos, // 32 robots x 12 spheres x 3 coordinates
+        float *T, // 32 robots x 4x4 transform matrix
+        const float *fixed_transforms, // 13 x 4x4 fixed transforms
+        const int tid
+    ) {
+        // every 4 threads are responsible for one column of the transform matrix T
+        // make_transform will calculate the necessary column of T_step needed for the thread
+        const int col_ind = tid%4;
         const int batch_ind = tid/4;
-        int transformed_sphere_ind=0;
+        int transformed_sphere_ind = 0;
 
-        float T_step[4][4];
-        float T[4][4];
+        int T_offset = batch_ind * 16;
+        float T_step_col[4]; // 4x1 column of the joint transform matrix for this thread
+        float *T_base = T + T_offset; // 4x4 transform matrix for the batch
+        float *T_col = T_base + col_ind; // 4x1 column of the transform matrix for this thread
 
-        const float joint_xyz[12][3] = {
-            {0, 0, 0.333}, {0, 0, 0}, {0, -0.316, 0}, {0.0825, 0, 0},
-            {-0.0825, 0.384, 0}, {0, 0, 0}, {0.088, 0, 0}, {0, 0, 0.107},
-            {0, 0, 0}, {0, 0.065, 0.0584}, {0, -0.065, 0.0584}, {0, 0, 0.105}
-        };
-
-        const float joint_rpy[12][3] = {
-            {0, 0, 0}, {-1.5708f, 0, 0}, {1.5708f, 0, 0}, {1.5708f, 0, 0},
-            {-1.5708f, 0, 0}, {1.5708f, 0, 0}, {1.5708f, 0, 0}, {0, 0, 0},
-            {0, 0, -0.7854f}, {0, 0, 0}, {0, 0, 0}, {0, 0, 0}
-        };
-
-        for (int c=0; c<4; c++){
-            T[row_ind][c] = (c==row_ind);
+        #pragma unroll
+        for (int r=0; r<4; r++){
+            T_col[r*4] = 0;
         }
+        T_col[col_ind*4] = 1;
 
-        if (row_ind==0){
+        if (col_ind==0){
             sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+0] = 0;
             sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+1] = 0;
             sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+2] = 0.5;
@@ -684,81 +768,74 @@ namespace ppln::collision {
 
         #pragma unroll
         for (int i = 0; i < 9; ++i) {
-
-            make_transform(joint_xyz[i][0], joint_xyz[i][1], joint_xyz[i][2],
-                        joint_rpy[i][0], joint_rpy[i][1], joint_rpy[i][2], T_step);
-            
-            float temp[4]={0, 0, 0, 0};
-            for (int c=0; c<4; c++){
-                for (int k=0; k<4; k++){
-                    temp[c] += T[row_ind][k] * T_step[k][c];
-                }
-                
-            }
-            for (int c=0; c<4; c++){
-                T[row_ind][c] = temp[c];
-            }
-
+            int ft_addr_start = (i + 1) * 16;
             if (i < 7) {
-                float c = cosf(q[i]), s = sinf(q[i]);
-                float R[4][4] = {
-                    {c, -s, 0, 0},
-                    {s,  c, 0, 0},
-                    {0,  0, 1, 0},
-                    {0,  0, 0, 1}
-                };
-
-                for (int c=0; c<4; c++){
-                    temp[c] = 0;
-                    for (int k=0; k<4; k++){
-                        temp[c] += T[row_ind][k] * R[k][c];
-                    }
-                }
-                
-                for (int c=0; c<4; c++){
-                    T[row_ind][c] = temp[c];
-                }
+                zrot_fn(&fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
+            }
+            else {
+                fixed_joint_fn(&fixed_transforms[ft_addr_start + col_ind], T_step_col);
             }
 
-            while (panda_link_index[transformed_sphere_ind]==i+1){
-                if (row_ind<3){
-                    sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3 + transformed_sphere_ind * 3 + row_ind] = T[row_ind][0]*panda_local_xyz[transformed_sphere_ind].x + T[row_ind][1]*panda_local_xyz[transformed_sphere_ind].y + T[row_ind][2]*panda_local_xyz[transformed_sphere_ind].z + T[row_ind][3];
+            #pragma unroll 4
+            for (int r=0; r<4; r++){
+                T_col[r*4] = dot4(&T_base[r*4], T_step_col);
+            }
+
+            __syncthreads();
+            // if (tid == 0) {
+            //     printf("i: %d, q[i]: %f, T: %f %f %f %f, %f %f %f %f, %f %f %f %f, %f %f %f %f\n", i, q[i], T_base[0], T_base[1], T_base[2], T_base[3], T_base[4], T_base[5], T_base[6], T_base[7], T_base[8], T_base[9], T_base[10], T_base[11], T_base[12], T_base[13], T_base[14], T_base[15]);
+            // }
+
+            while (panda_link_index[transformed_sphere_ind]==i+1) {
+                if (col_ind < 3) {
+                    sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3 + transformed_sphere_ind * 3 + col_ind] = 
+                        T_base[col_ind*4 + 0] * panda_local_xyz[transformed_sphere_ind].x +
+                        T_base[col_ind*4 + 1] * panda_local_xyz[transformed_sphere_ind].y +
+                        T_base[col_ind*4 + 2] * panda_local_xyz[transformed_sphere_ind].z +
+                        T_base[col_ind*4 + 3];
                 }
                 transformed_sphere_ind++;
             }
-
         }
-
         // left, right finger
         #pragma unroll
-        for (int i=9; i<12; i++){
-            make_transform(joint_xyz[i][0], joint_xyz[i][1], joint_xyz[i][2],
-                        joint_rpy[i][0], joint_rpy[i][1], joint_rpy[i][2], T_step);
+        for (int i = 9; i < 12; i++) {
+            int ft_addr_start = (i + 1) * 16;
+            fixed_joint_fn(&fixed_transforms[ft_addr_start + col_ind], T_step_col);
             
-            float temp[4]={0, 0, 0, 0};
-            for (int c=0; c<4; c++){
-                for (int k=0; k<4; k++){
-                    temp[c] += T[row_ind][k] * T_step[k][c];
-                }
+            // for these joints, we don't want to update T_base, so we need to save the old value
+            float old_T_col[4];
+            #pragma unroll 4
+            for (int r=0; r<4; r++){
+                old_T_col[r] = T_col[r*4];
+                T_col[r*4] = dot4(&T_base[r*4], T_step_col);
             }
 
-            while (transformed_sphere_ind<PANDA_SPHERE_COUNT && panda_link_index[transformed_sphere_ind]==i+1){
-                if (row_ind<3){
-                    sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3 + transformed_sphere_ind * 3 + row_ind] = temp[0]*panda_local_xyz[transformed_sphere_ind].x + temp[1]*panda_local_xyz[transformed_sphere_ind].y + temp[2]*panda_local_xyz[transformed_sphere_ind].z + temp[3];
+            __syncthreads();
+            // if (tid == 0) {
+            //     printf("i: %d, T: %f %f %f %f, %f %f %f %f, %f %f %f %f, %f %f %f %f\n", i, T_base[0], T_base[1], T_base[2], T_base[3], T_base[4], T_base[5], T_base[6], T_base[7], T_base[8], T_base[9], T_base[10], T_base[11], T_base[12], T_base[13], T_base[14], T_base[15]);
+            // }
+
+            while (transformed_sphere_ind < PANDA_SPHERE_COUNT && panda_link_index[transformed_sphere_ind] == i + 1){
+                if (col_ind < 3){
+                    sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3 + transformed_sphere_ind * 3 + col_ind] = 
+                        T_base[col_ind*4 + 0] * panda_local_xyz[transformed_sphere_ind].x +
+                        T_base[col_ind*4 + 1] * panda_local_xyz[transformed_sphere_ind].y +
+                        T_base[col_ind*4 + 2] * panda_local_xyz[transformed_sphere_ind].z +
+                        T_base[col_ind*4 + 3];
                 }
                 transformed_sphere_ind++;
             }
-        }
 
-        /*
-        if (tid==0){
-            for (int r=3; r<PANDA_SPHERE_COUNT*3; r+=3){
-                printf("sphere %d: %f %f %f\n", r/3, sphere_pos[r], sphere_pos[r+1], sphere_pos[r+2]);
+            // restore T_col
+            #pragma unroll 4
+            for (int r=0; r<4; r++){
+                T_col[r*4] = old_T_col[r];
             }
         }
-        */
-        return;
     }
+
+    
 
     // 4 threads per discretized motion for self-collision check
     template <>
