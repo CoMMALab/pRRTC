@@ -158,6 +158,20 @@ namespace ppln::device_utils {
         { 0.000f,   0.012f,   0.033f,   0.024f },   // panda_leftfinger
         { 0.000f,  -0.012f,   0.033f,   0.024f },   // panda_rightfinger
     };
+
+    __device__ __constant__ float4 approx_spheres_array[11] = {
+        { 0.0f, 0.0f, 0.05f, 0.08f },
+        { -0.001f, -0.039f, -0.085f, 0.154f },
+        { 0.0f, -0.085f, 0.04f, 0.154f },
+        { 0.039f, 0.028f, -0.052f, 0.128f },
+        { -0.042f, 0.049f, 0.029f, 0.126f },
+        { -0.001f, 0.037f, -0.11f, 0.176f },
+        { 0.042f, 0.014f, 0.0f, 0.095f },
+        { 0.015f, 0.015f, 0.075f, 0.072f },
+        { 0.0f, 0.0f, 0.129f, 0.104f },
+        { 0.054447f, 0.054447f, 0.1984f, 0.024f },
+        { -0.054447f, -0.054447f, 0.1984f, 0.024f }
+    };
     
     /* math utils */
     __device__ __forceinline__ constexpr float dot_2(const float &ax, const float &ay, const float &bx, const float &by) 
@@ -502,85 +516,963 @@ namespace ppln::collision {
         }
     }
 
-    __device__ __constant__ float panda_fixed_transforms[] = {
-        // Link 0
-        1.000000, 0.000000, 0.000000, 0.000000,
-        0.000000, 1.000000, 0.000000, 0.000000,
-        0.000000, 0.000000, 1.000000, 0.000000,
-        0.000000, 0.000000, 0.000000, 1.000000,
-
-        // Link 1
-        1.000000, 0.000000, 0.000000, 0.000000,
-        0.000000, 1.000000, 0.000000, 0.000000,
-        0.000000, 0.000000, 1.000000, 0.333000,
-        0.000000, 0.000000, 0.000000, 1.000000,
-        
-        // Link 2
-        1.000000, 0.000000, 0.000000, 0.000000,
-        0.000000, 0.000000, 1.000000, 0.000000,
-        0.000000, -1.000000, 0.000000, 0.000000,
-        0.000000, 0.000000, 0.000000, 1.000000,
-        
-        // Link 3
-        1.000000, 0.000000, 0.000000, 0.000000,
-        0.000000, 0.000000, -1.000000, -0.316000,
-        0.000000, 1.000000, 0.000000, 0.000000,
-        0.000000, 0.000000, 0.000000, 1.000000,
-
-        // Link 4
-        1.000000, 0.000000, 0.000000, 0.082500,
-        0.000000, 0.000000, -1.000000, 0.000000,
-        0.000000, 1.000000, 0.000000, 0.000000,
-        0.000000, 0.000000, 0.000000, 1.000000,
-
-        // Link 5
-        1.000000, 0.000000, 0.000000, -0.082500,
-        0.000000, 0.000000, 1.000000, 0.384000,
-        0.000000, -1.000000, 0.000000, 0.000000,
-        0.000000, 0.000000, 0.000000, 1.000000,
-
-        // Link 6
-        1.000000, 0.000000, 0.000000, 0.000000,
-        0.000000, 0.000000, -1.000000, 0.000000,
-        0.000000, 1.000000, 0.000000, 0.000000,
-        0.000000, 0.000000, 0.000000, 1.000000,
-
-        // Link 7
-        1.000000, 0.000000, 0.000000, 0.088000,
-        0.000000, 0.000000, -1.000000, 0.000000,
-        0.000000, 1.000000, 0.000000, 0.000000,
-        0.000000, 0.000000, 0.000000, 1.000000,
-
-        // Link 8
-        1.000000, 0.000000, 0.000000, 0.000000,
-        0.000000, 1.000000, 0.000000, 0.000000,
-        0.000000, 0.000000, 1.000000, 0.107000,
-        0.000000, 0.000000, 0.000000, 1.000000,
-
-        // Link 9
-        0.707107, 0.707107, 0.000000, 0.000000,
-        -0.707107, 0.707107, 0.000000, 0.000000,
-        0.000000, 0.000000, 1.000000, 0.000000,
-        0.000000, 0.000000, 0.000000, 1.000000,
-
-        // Link 10
-        1.000000, -0.000000, -0.000000, 0.000000,
-        0.000000, 1.000000, 0.000000, 0.065000,
-        0.000000, -0.000000, 1.000000, 0.058400,
-        0.000000, 0.000000, 0.000000, 1.000000,
-
-        // Link 11
-        1.000000, -0.000000, -0.000000, -0.000000,
-        0.000000, 1.000000, 0.000000, -0.065000,
-        0.000000, -0.000000, 1.000000, 0.058400,
-        0.000000, 0.000000, 0.000000, 1.000000,
-
-        // Link 12
-        1.000000, 0.000000, 0.000000, 0.000000,
-        0.000000, 1.000000, 0.000000, 0.000000,
-        0.000000, 0.000000, 1.000000, 0.105000,
-        0.000000, 0.000000, 0.000000, 1.000000
+    
+    /* panda approx constants */
+    __device__ __constant__ float4 panda_approx_spheres_array[11] = {
+        { 0.0f, 0.0f, 0.05f, 0.08f },
+        { -0.001f, -0.039f, -0.085f, 0.154f },
+        { 0.0f, -0.085f, 0.04f, 0.154f },
+        { 0.039f, 0.028f, -0.052f, 0.128f },
+        { -0.042f, 0.049f, 0.029f, 0.126f },
+        { -0.001f, 0.037f, -0.11f, 0.176f },
+        { 0.042f, 0.014f, 0.0f, 0.095f },
+        { 0.015f, 0.015f, 0.075f, 0.072f },
+        { 0.0f, 0.0f, 0.129f, 0.104f },
+        { 0.054447f, 0.054447f, 0.1984f, 0.024f },
+        { -0.054447f, -0.054447f, 0.1984f, 0.024f }
     };
+    
+    __device__ __constant__ int panda_approx_self_cc_pairs[21][2] = {
+        { 0, 5 },
+        { 0, 6 },
+        { 0, 7 },
+        { 0, 8 },
+        { 0, 9 },
+        { 0, 10 },
+        { 1, 5 },
+        { 1, 6 },
+        { 1, 7 },
+        { 1, 8 },
+        { 1, 9 },
+        { 1, 10 },
+        { 2, 5 },
+        { 2, 7 },
+        { 2, 8 },
+        { 2, 9 },
+        { 2, 10 },
+        { 5, 7 },
+        { 5, 8 },
+        { 5, 9 },
+        { 5, 10 }
+    };
+    
+    
+    
+    __device__ __constant__ float panda_approx_sphere_to_joint[] = {
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        7,
+        7,
+        7
+    };
+    
+    __device__ __constant__ int panda_approx_joint_types[] = {
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2
+    };
+    /* end panda approx constants */
+
+    /* panda full constants */
+    __device__ __constant__ float4 panda_spheres_array[59] = {
+        { 0.0f, 0.0f, 0.05f, 0.08f },
+        { 0.0f, -0.08f, 0.0f, 0.06f },
+        { 0.0f, -0.03f, 0.0f, 0.06f },
+        { 0.0f, 0.0f, -0.12f, 0.06f },
+        { 0.0f, 0.0f, -0.17f, 0.06f },
+        { 0.0f, 0.0f, 0.03f, 0.06f },
+        { 0.0f, 0.0f, 0.08f, 0.06f },
+        { 0.0f, -0.12f, 0.0f, 0.06f },
+        { 0.0f, -0.17f, 0.0f, 0.06f },
+        { 0.0f, 0.0f, -0.1f, 0.06f },
+        { 0.0f, 0.0f, -0.06f, 0.05f },
+        { 0.08f, 0.06f, 0.0f, 0.055f },
+        { 0.08f, 0.02f, 0.0f, 0.055f },
+        { -0.08f, 0.095f, 0.0f, 0.06f },
+        { 0.0f, 0.0f, 0.02f, 0.055f },
+        { 0.0f, 0.0f, 0.06f, 0.055f },
+        { -0.08f, 0.06f, 0.0f, 0.055f },
+        { 0.0f, 0.055f, 0.0f, 0.06f },
+        { 0.0f, 0.075f, 0.0f, 0.06f },
+        { 0.0f, 0.0f, -0.22f, 0.06f },
+        { 0.0f, 0.05f, -0.18f, 0.05f },
+        { 0.01f, 0.08f, -0.14f, 0.025f },
+        { 0.01f, 0.085f, -0.11f, 0.025f },
+        { 0.01f, 0.09f, -0.08f, 0.025f },
+        { 0.01f, 0.095f, -0.05f, 0.025f },
+        { -0.01f, 0.08f, -0.14f, 0.025f },
+        { -0.01f, 0.085f, -0.11f, 0.025f },
+        { -0.01f, 0.09f, -0.08f, 0.025f },
+        { -0.01f, 0.095f, -0.05f, 0.025f },
+        { 0.0f, 0.0f, 0.0f, 0.05f },
+        { 0.08f, -0.01f, 0.0f, 0.05f },
+        { 0.08f, 0.035f, 0.0f, 0.052f },
+        { 0.0f, 0.0f, 0.07f, 0.05f },
+        { 0.02f, 0.04f, 0.08f, 0.025f },
+        { 0.04f, 0.02f, 0.08f, 0.025f },
+        { 0.04f, 0.06f, 0.085f, 0.02f },
+        { 0.06f, 0.04f, 0.085f, 0.02f },
+        { -0.053033f, -0.053033f, 0.117f, 0.028f },
+        { -0.03182f, -0.03182f, 0.117f, 0.028f },
+        { -0.010607f, -0.010607f, 0.117f, 0.028f },
+        { 0.010607f, 0.010607f, 0.117f, 0.028f },
+        { 0.03182f, 0.03182f, 0.117f, 0.028f },
+        { 0.053033f, 0.053033f, 0.117f, 0.028f },
+        { -0.053033f, -0.053033f, 0.137f, 0.026f },
+        { -0.03182f, -0.03182f, 0.137f, 0.026f },
+        { -0.010607f, -0.010607f, 0.137f, 0.026f },
+        { 0.010607f, 0.010607f, 0.137f, 0.026f },
+        { 0.03182f, 0.03182f, 0.137f, 0.026f },
+        { 0.053033f, 0.053033f, 0.137f, 0.026f },
+        { -0.053033f, -0.053033f, 0.157f, 0.024f },
+        { -0.03182f, -0.03182f, 0.157f, 0.024f },
+        { -0.010607f, -0.010607f, 0.157f, 0.024f },
+        { 0.010607f, 0.010607f, 0.157f, 0.024f },
+        { 0.03182f, 0.03182f, 0.157f, 0.024f },
+        { 0.053033f, 0.053033f, 0.157f, 0.024f },
+        { 0.056569f, 0.056569f, 0.1874f, 0.012f },
+        { 0.051619f, 0.051619f, 0.2094f, 0.012f },
+        { -0.056569f, -0.056569f, 0.1874f, 0.012f },
+        { -0.051619f, -0.051619f, 0.2094f, 0.012f }
+    };
+
+
+
+
+
+
+
+
+    __device__ __constant__ int panda_self_cc_pairs[690][2] = {
+        { 0, 17 },
+        { 0, 18 },
+        { 0, 19 },
+        { 0, 20 },
+        { 0, 21 },
+        { 0, 22 },
+        { 0, 23 },
+        { 0, 24 },
+        { 0, 25 },
+        { 0, 26 },
+        { 0, 27 },
+        { 0, 28 },
+        { 0, 29 },
+        { 0, 30 },
+        { 0, 31 },
+        { 0, 32 },
+        { 0, 33 },
+        { 0, 34 },
+        { 0, 35 },
+        { 0, 36 },
+        { 0, 37 },
+        { 0, 38 },
+        { 0, 39 },
+        { 0, 40 },
+        { 0, 41 },
+        { 0, 42 },
+        { 0, 43 },
+        { 0, 44 },
+        { 0, 45 },
+        { 0, 46 },
+        { 0, 47 },
+        { 0, 48 },
+        { 0, 49 },
+        { 0, 50 },
+        { 0, 51 },
+        { 0, 52 },
+        { 0, 53 },
+        { 0, 54 },
+        { 0, 55 },
+        { 0, 56 },
+        { 0, 57 },
+        { 0, 58 },
+        { 1, 17 },
+        { 1, 18 },
+        { 1, 19 },
+        { 1, 20 },
+        { 1, 21 },
+        { 1, 22 },
+        { 1, 23 },
+        { 1, 24 },
+        { 1, 25 },
+        { 1, 26 },
+        { 1, 27 },
+        { 1, 28 },
+        { 1, 29 },
+        { 1, 30 },
+        { 1, 31 },
+        { 1, 32 },
+        { 1, 33 },
+        { 1, 34 },
+        { 1, 35 },
+        { 1, 36 },
+        { 1, 37 },
+        { 1, 38 },
+        { 1, 39 },
+        { 1, 40 },
+        { 1, 41 },
+        { 1, 42 },
+        { 1, 43 },
+        { 1, 44 },
+        { 1, 45 },
+        { 1, 46 },
+        { 1, 47 },
+        { 1, 48 },
+        { 1, 49 },
+        { 1, 50 },
+        { 1, 51 },
+        { 1, 52 },
+        { 1, 53 },
+        { 1, 54 },
+        { 1, 55 },
+        { 1, 56 },
+        { 1, 57 },
+        { 1, 58 },
+        { 2, 17 },
+        { 2, 18 },
+        { 2, 19 },
+        { 2, 20 },
+        { 2, 21 },
+        { 2, 22 },
+        { 2, 23 },
+        { 2, 24 },
+        { 2, 25 },
+        { 2, 26 },
+        { 2, 27 },
+        { 2, 28 },
+        { 2, 29 },
+        { 2, 30 },
+        { 2, 31 },
+        { 2, 32 },
+        { 2, 33 },
+        { 2, 34 },
+        { 2, 35 },
+        { 2, 36 },
+        { 2, 37 },
+        { 2, 38 },
+        { 2, 39 },
+        { 2, 40 },
+        { 2, 41 },
+        { 2, 42 },
+        { 2, 43 },
+        { 2, 44 },
+        { 2, 45 },
+        { 2, 46 },
+        { 2, 47 },
+        { 2, 48 },
+        { 2, 49 },
+        { 2, 50 },
+        { 2, 51 },
+        { 2, 52 },
+        { 2, 53 },
+        { 2, 54 },
+        { 2, 55 },
+        { 2, 56 },
+        { 2, 57 },
+        { 2, 58 },
+        { 3, 17 },
+        { 3, 18 },
+        { 3, 19 },
+        { 3, 20 },
+        { 3, 21 },
+        { 3, 22 },
+        { 3, 23 },
+        { 3, 24 },
+        { 3, 25 },
+        { 3, 26 },
+        { 3, 27 },
+        { 3, 28 },
+        { 3, 29 },
+        { 3, 30 },
+        { 3, 31 },
+        { 3, 32 },
+        { 3, 33 },
+        { 3, 34 },
+        { 3, 35 },
+        { 3, 36 },
+        { 3, 37 },
+        { 3, 38 },
+        { 3, 39 },
+        { 3, 40 },
+        { 3, 41 },
+        { 3, 42 },
+        { 3, 43 },
+        { 3, 44 },
+        { 3, 45 },
+        { 3, 46 },
+        { 3, 47 },
+        { 3, 48 },
+        { 3, 49 },
+        { 3, 50 },
+        { 3, 51 },
+        { 3, 52 },
+        { 3, 53 },
+        { 3, 54 },
+        { 3, 55 },
+        { 3, 56 },
+        { 3, 57 },
+        { 3, 58 },
+        { 4, 17 },
+        { 4, 18 },
+        { 4, 19 },
+        { 4, 20 },
+        { 4, 21 },
+        { 4, 22 },
+        { 4, 23 },
+        { 4, 24 },
+        { 4, 25 },
+        { 4, 26 },
+        { 4, 27 },
+        { 4, 28 },
+        { 4, 29 },
+        { 4, 30 },
+        { 4, 31 },
+        { 4, 32 },
+        { 4, 33 },
+        { 4, 34 },
+        { 4, 35 },
+        { 4, 36 },
+        { 4, 37 },
+        { 4, 38 },
+        { 4, 39 },
+        { 4, 40 },
+        { 4, 41 },
+        { 4, 42 },
+        { 4, 43 },
+        { 4, 44 },
+        { 4, 45 },
+        { 4, 46 },
+        { 4, 47 },
+        { 4, 48 },
+        { 4, 49 },
+        { 4, 50 },
+        { 4, 51 },
+        { 4, 52 },
+        { 4, 53 },
+        { 4, 54 },
+        { 4, 55 },
+        { 4, 56 },
+        { 4, 57 },
+        { 4, 58 },
+        { 5, 17 },
+        { 5, 18 },
+        { 5, 19 },
+        { 5, 20 },
+        { 5, 21 },
+        { 5, 22 },
+        { 5, 23 },
+        { 5, 24 },
+        { 5, 25 },
+        { 5, 26 },
+        { 5, 27 },
+        { 5, 28 },
+        { 5, 32 },
+        { 5, 33 },
+        { 5, 34 },
+        { 5, 35 },
+        { 5, 36 },
+        { 5, 37 },
+        { 5, 38 },
+        { 5, 39 },
+        { 5, 40 },
+        { 5, 41 },
+        { 5, 42 },
+        { 5, 43 },
+        { 5, 44 },
+        { 5, 45 },
+        { 5, 46 },
+        { 5, 47 },
+        { 5, 48 },
+        { 5, 49 },
+        { 5, 50 },
+        { 5, 51 },
+        { 5, 52 },
+        { 5, 53 },
+        { 5, 54 },
+        { 5, 55 },
+        { 5, 56 },
+        { 5, 57 },
+        { 5, 58 },
+        { 6, 17 },
+        { 6, 18 },
+        { 6, 19 },
+        { 6, 20 },
+        { 6, 21 },
+        { 6, 22 },
+        { 6, 23 },
+        { 6, 24 },
+        { 6, 25 },
+        { 6, 26 },
+        { 6, 27 },
+        { 6, 28 },
+        { 6, 32 },
+        { 6, 33 },
+        { 6, 34 },
+        { 6, 35 },
+        { 6, 36 },
+        { 6, 37 },
+        { 6, 38 },
+        { 6, 39 },
+        { 6, 40 },
+        { 6, 41 },
+        { 6, 42 },
+        { 6, 43 },
+        { 6, 44 },
+        { 6, 45 },
+        { 6, 46 },
+        { 6, 47 },
+        { 6, 48 },
+        { 6, 49 },
+        { 6, 50 },
+        { 6, 51 },
+        { 6, 52 },
+        { 6, 53 },
+        { 6, 54 },
+        { 6, 55 },
+        { 6, 56 },
+        { 6, 57 },
+        { 6, 58 },
+        { 7, 17 },
+        { 7, 18 },
+        { 7, 19 },
+        { 7, 20 },
+        { 7, 21 },
+        { 7, 22 },
+        { 7, 23 },
+        { 7, 24 },
+        { 7, 25 },
+        { 7, 26 },
+        { 7, 27 },
+        { 7, 28 },
+        { 7, 32 },
+        { 7, 33 },
+        { 7, 34 },
+        { 7, 35 },
+        { 7, 36 },
+        { 7, 37 },
+        { 7, 38 },
+        { 7, 39 },
+        { 7, 40 },
+        { 7, 41 },
+        { 7, 42 },
+        { 7, 43 },
+        { 7, 44 },
+        { 7, 45 },
+        { 7, 46 },
+        { 7, 47 },
+        { 7, 48 },
+        { 7, 49 },
+        { 7, 50 },
+        { 7, 51 },
+        { 7, 52 },
+        { 7, 53 },
+        { 7, 54 },
+        { 7, 55 },
+        { 7, 56 },
+        { 7, 57 },
+        { 7, 58 },
+        { 8, 17 },
+        { 8, 18 },
+        { 8, 19 },
+        { 8, 20 },
+        { 8, 21 },
+        { 8, 22 },
+        { 8, 23 },
+        { 8, 24 },
+        { 8, 25 },
+        { 8, 26 },
+        { 8, 27 },
+        { 8, 28 },
+        { 8, 32 },
+        { 8, 33 },
+        { 8, 34 },
+        { 8, 35 },
+        { 8, 36 },
+        { 8, 37 },
+        { 8, 38 },
+        { 8, 39 },
+        { 8, 40 },
+        { 8, 41 },
+        { 8, 42 },
+        { 8, 43 },
+        { 8, 44 },
+        { 8, 45 },
+        { 8, 46 },
+        { 8, 47 },
+        { 8, 48 },
+        { 8, 49 },
+        { 8, 50 },
+        { 8, 51 },
+        { 8, 52 },
+        { 8, 53 },
+        { 8, 54 },
+        { 8, 55 },
+        { 8, 56 },
+        { 8, 57 },
+        { 8, 58 },
+        { 17, 32 },
+        { 17, 33 },
+        { 17, 34 },
+        { 17, 35 },
+        { 17, 36 },
+        { 17, 37 },
+        { 17, 38 },
+        { 17, 39 },
+        { 17, 40 },
+        { 17, 41 },
+        { 17, 42 },
+        { 17, 43 },
+        { 17, 44 },
+        { 17, 45 },
+        { 17, 46 },
+        { 17, 47 },
+        { 17, 48 },
+        { 17, 49 },
+        { 17, 50 },
+        { 17, 51 },
+        { 17, 52 },
+        { 17, 53 },
+        { 17, 54 },
+        { 17, 55 },
+        { 17, 56 },
+        { 17, 57 },
+        { 17, 58 },
+        { 18, 32 },
+        { 18, 33 },
+        { 18, 34 },
+        { 18, 35 },
+        { 18, 36 },
+        { 18, 37 },
+        { 18, 38 },
+        { 18, 39 },
+        { 18, 40 },
+        { 18, 41 },
+        { 18, 42 },
+        { 18, 43 },
+        { 18, 44 },
+        { 18, 45 },
+        { 18, 46 },
+        { 18, 47 },
+        { 18, 48 },
+        { 18, 49 },
+        { 18, 50 },
+        { 18, 51 },
+        { 18, 52 },
+        { 18, 53 },
+        { 18, 54 },
+        { 18, 55 },
+        { 18, 56 },
+        { 18, 57 },
+        { 18, 58 },
+        { 19, 32 },
+        { 19, 33 },
+        { 19, 34 },
+        { 19, 35 },
+        { 19, 36 },
+        { 19, 37 },
+        { 19, 38 },
+        { 19, 39 },
+        { 19, 40 },
+        { 19, 41 },
+        { 19, 42 },
+        { 19, 43 },
+        { 19, 44 },
+        { 19, 45 },
+        { 19, 46 },
+        { 19, 47 },
+        { 19, 48 },
+        { 19, 49 },
+        { 19, 50 },
+        { 19, 51 },
+        { 19, 52 },
+        { 19, 53 },
+        { 19, 54 },
+        { 19, 55 },
+        { 19, 56 },
+        { 19, 57 },
+        { 19, 58 },
+        { 20, 32 },
+        { 20, 33 },
+        { 20, 34 },
+        { 20, 35 },
+        { 20, 36 },
+        { 20, 37 },
+        { 20, 38 },
+        { 20, 39 },
+        { 20, 40 },
+        { 20, 41 },
+        { 20, 42 },
+        { 20, 43 },
+        { 20, 44 },
+        { 20, 45 },
+        { 20, 46 },
+        { 20, 47 },
+        { 20, 48 },
+        { 20, 49 },
+        { 20, 50 },
+        { 20, 51 },
+        { 20, 52 },
+        { 20, 53 },
+        { 20, 54 },
+        { 20, 55 },
+        { 20, 56 },
+        { 20, 57 },
+        { 20, 58 },
+        { 21, 32 },
+        { 21, 33 },
+        { 21, 34 },
+        { 21, 35 },
+        { 21, 36 },
+        { 21, 37 },
+        { 21, 38 },
+        { 21, 39 },
+        { 21, 40 },
+        { 21, 41 },
+        { 21, 42 },
+        { 21, 43 },
+        { 21, 44 },
+        { 21, 45 },
+        { 21, 46 },
+        { 21, 47 },
+        { 21, 48 },
+        { 21, 49 },
+        { 21, 50 },
+        { 21, 51 },
+        { 21, 52 },
+        { 21, 53 },
+        { 21, 54 },
+        { 21, 55 },
+        { 21, 56 },
+        { 21, 57 },
+        { 21, 58 },
+        { 22, 32 },
+        { 22, 33 },
+        { 22, 34 },
+        { 22, 35 },
+        { 22, 36 },
+        { 22, 37 },
+        { 22, 38 },
+        { 22, 39 },
+        { 22, 40 },
+        { 22, 41 },
+        { 22, 42 },
+        { 22, 43 },
+        { 22, 44 },
+        { 22, 45 },
+        { 22, 46 },
+        { 22, 47 },
+        { 22, 48 },
+        { 22, 49 },
+        { 22, 50 },
+        { 22, 51 },
+        { 22, 52 },
+        { 22, 53 },
+        { 22, 54 },
+        { 22, 55 },
+        { 22, 56 },
+        { 22, 57 },
+        { 22, 58 },
+        { 23, 32 },
+        { 23, 33 },
+        { 23, 34 },
+        { 23, 35 },
+        { 23, 36 },
+        { 23, 37 },
+        { 23, 38 },
+        { 23, 39 },
+        { 23, 40 },
+        { 23, 41 },
+        { 23, 42 },
+        { 23, 43 },
+        { 23, 44 },
+        { 23, 45 },
+        { 23, 46 },
+        { 23, 47 },
+        { 23, 48 },
+        { 23, 49 },
+        { 23, 50 },
+        { 23, 51 },
+        { 23, 52 },
+        { 23, 53 },
+        { 23, 54 },
+        { 23, 55 },
+        { 23, 56 },
+        { 23, 57 },
+        { 23, 58 },
+        { 24, 32 },
+        { 24, 33 },
+        { 24, 34 },
+        { 24, 35 },
+        { 24, 36 },
+        { 24, 37 },
+        { 24, 38 },
+        { 24, 39 },
+        { 24, 40 },
+        { 24, 41 },
+        { 24, 42 },
+        { 24, 43 },
+        { 24, 44 },
+        { 24, 45 },
+        { 24, 46 },
+        { 24, 47 },
+        { 24, 48 },
+        { 24, 49 },
+        { 24, 50 },
+        { 24, 51 },
+        { 24, 52 },
+        { 24, 53 },
+        { 24, 54 },
+        { 24, 55 },
+        { 24, 56 },
+        { 24, 57 },
+        { 24, 58 },
+        { 25, 32 },
+        { 25, 33 },
+        { 25, 34 },
+        { 25, 35 },
+        { 25, 36 },
+        { 25, 37 },
+        { 25, 38 },
+        { 25, 39 },
+        { 25, 40 },
+        { 25, 41 },
+        { 25, 42 },
+        { 25, 43 },
+        { 25, 44 },
+        { 25, 45 },
+        { 25, 46 },
+        { 25, 47 },
+        { 25, 48 },
+        { 25, 49 },
+        { 25, 50 },
+        { 25, 51 },
+        { 25, 52 },
+        { 25, 53 },
+        { 25, 54 },
+        { 25, 55 },
+        { 25, 56 },
+        { 25, 57 },
+        { 25, 58 },
+        { 26, 32 },
+        { 26, 33 },
+        { 26, 34 },
+        { 26, 35 },
+        { 26, 36 },
+        { 26, 37 },
+        { 26, 38 },
+        { 26, 39 },
+        { 26, 40 },
+        { 26, 41 },
+        { 26, 42 },
+        { 26, 43 },
+        { 26, 44 },
+        { 26, 45 },
+        { 26, 46 },
+        { 26, 47 },
+        { 26, 48 },
+        { 26, 49 },
+        { 26, 50 },
+        { 26, 51 },
+        { 26, 52 },
+        { 26, 53 },
+        { 26, 54 },
+        { 26, 55 },
+        { 26, 56 },
+        { 26, 57 },
+        { 26, 58 },
+        { 27, 32 },
+        { 27, 33 },
+        { 27, 34 },
+        { 27, 35 },
+        { 27, 36 },
+        { 27, 37 },
+        { 27, 38 },
+        { 27, 39 },
+        { 27, 40 },
+        { 27, 41 },
+        { 27, 42 },
+        { 27, 43 },
+        { 27, 44 },
+        { 27, 45 },
+        { 27, 46 },
+        { 27, 47 },
+        { 27, 48 },
+        { 27, 49 },
+        { 27, 50 },
+        { 27, 51 },
+        { 27, 52 },
+        { 27, 53 },
+        { 27, 54 },
+        { 27, 55 },
+        { 27, 56 },
+        { 27, 57 },
+        { 27, 58 },
+        { 28, 32 },
+        { 28, 33 },
+        { 28, 34 },
+        { 28, 35 },
+        { 28, 36 },
+        { 28, 37 },
+        { 28, 38 },
+        { 28, 39 },
+        { 28, 40 },
+        { 28, 41 },
+        { 28, 42 },
+        { 28, 43 },
+        { 28, 44 },
+        { 28, 45 },
+        { 28, 46 },
+        { 28, 47 },
+        { 28, 48 },
+        { 28, 49 },
+        { 28, 50 },
+        { 28, 51 },
+        { 28, 52 },
+        { 28, 53 },
+        { 28, 54 },
+        { 28, 55 },
+        { 28, 56 },
+        { 28, 57 },
+        { 28, 58 }
+    };
+
+    __device__ __constant__ float panda_fixed_transforms[] = {
+        // joint 0
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+        
+        // joint 1
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.333,
+        0.0, 0.0, 0.0, 1.0,
+        
+        // joint 2
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, -1.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+        
+        // joint 3
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, -1.0, -0.316,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+        
+        // joint 4
+        1.0, 0.0, 0.0, 0.0825,
+        0.0, 0.0, -1.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+        
+        // joint 5
+        1.0, 0.0, 0.0, -0.0825,
+        0.0, 0.0, 1.0, 0.384,
+        0.0, -1.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+        
+        // joint 6
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 0.0, -1.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+        
+        // joint 7
+        1.0, 0.0, 0.0, 0.088,
+        0.0, 0.0, -1.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+        
+        
+    };
+
+    __device__ __constant__ float panda_sphere_to_joint[] = {
+        0,
+        1,
+        1,
+        1,
+        1,
+        2,
+        2,
+        2,
+        2,
+        3,
+        3,
+        3,
+        3,
+        4,
+        4,
+        4,
+        4,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        5,
+        6,
+        6,
+        6,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7
+    };
+
+    __device__ __constant__ int panda_joint_types[] = {
+        0,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2,
+        2
+    };
+    /* end panda full constants */
+    
 
     __device__ __forceinline__ void fixed_joint_fn(
         const float *fixed_transform,
@@ -591,6 +1483,95 @@ namespace ppln::collision {
         T_step_col[1] = fixed_transform[M];
         T_step_col[2] = fixed_transform[M * 2];
         T_step_col[3] = fixed_transform[M * 3];
+    }
+
+    template<typename scalar_t>
+    __device__ __forceinline__ void xrot_fn(
+        const float *fixed_transforms,
+        const float angle,
+        const int col_idx,
+        float *T_step_col
+    )
+    {
+      // we found no change in convergence between fast approximate and IEEE sin,
+      // cos functions using fast approximate method saves 5 registers per thread.
+      float cos   = __cosf(angle);
+      float sin   = __sinf(angle);
+      float n_sin = -1 * sin;
+
+      int bit1         = col_idx & 0x1;
+      int bit2         = (col_idx & 0x2) >> 1;
+      int _xor         = bit1 ^ bit2;  // 0 for threads 0 and 3, 1 for threads 1 and 2
+      int col_idx_by_2 =
+        col_idx / 2;                   // 0 for threads 0 and 1, 1 for threads 2 and 3
+
+      float f1 = (1 - col_idx_by_2) * cos +
+                 col_idx_by_2 * n_sin; // thread 1 get cos , thread 2 gets n_sin
+      float f2 = (1 - col_idx_by_2) * sin +
+                 col_idx_by_2 * cos;   // thread 1 get sin, thread 2 gets cos
+
+      f1 = _xor * f1 + (1 - _xor) * 1; // threads 1 and 2 will get f1; the other
+                                       // two threads will get 1
+      f2 = _xor *
+           f2;                         // threads 1 and 2 will get f2, the other two threads will
+                                       // get 0.0
+      float f3 = 1 - _xor;
+
+      int addr_offset =
+        _xor + (1 - _xor) *
+        col_idx; // 1 for threads 1 and 2, col_idx for threads 0 and 3
+
+      T_step_col[0] = fixed_transforms[0 + addr_offset] * f1 + f2 * fixed_transforms[2];
+      T_step_col[1] = fixed_transforms[M + addr_offset] * f1 + f2 * fixed_transforms[M + 2];
+      T_step_col[2] =
+        fixed_transforms[M + M + addr_offset] * f1 + f2 * fixed_transforms[M + M + 2];
+      T_step_col[3] = fixed_transforms[M + M + M + addr_offset] *
+              f3; // threads 1 and 2 get 0.0, remaining two get fixed_transforms[3M];
+    }
+
+    // version with no control flow
+    template<typename scalar_t>
+    __device__ __forceinline__ void yrot_fn(
+        const float *fixed_transforms,
+        const float angle,
+        const int col_idx,
+        float *T_step_col
+    )
+    {
+      float cos   = __cosf(angle);
+      float sin   = __sinf(angle);
+      float n_sin = -1 * sin;
+
+      int col_idx_per_2 =
+        col_idx % 2;                 // threads 0 and 2 will be 0 and threads 1 and 3 will be 1.
+      int col_idx_by_2 =
+        col_idx / 2;                 // threads 0 and 1 will be 0 and threads 2 and 3 will be 1.
+
+      float f1 = (1 - col_idx_by_2) * cos +
+                 col_idx_by_2 * sin; // thread 0 get cos , thread 2 gets sin
+      float f2 = (1 - col_idx_by_2) * n_sin +
+                 col_idx_by_2 * cos; // thread 0 get n_sin, thread 2 gets cos
+
+      f1 = (1 - col_idx_per_2) * f1 +
+           col_idx_per_2 * 1;        // threads 0 and 2 will get f1; the other two
+                                     // threads will get 1
+      f2 = (1 - col_idx_per_2) *
+           f2;                       // threads 0 and 2 will get f2, the other two threads will get
+                                     // 0.0
+      float f3 =
+        col_idx_per_2;               // threads 0 and 2 will be 0 and threads 1 and 3 will be 1.
+
+      int addr_offset =
+        col_idx_per_2 *
+        col_idx; // threads 0 and 2 will get 0, the other two will get col_idx.
+
+      T_step_col[0] = fixed_transforms[0 + addr_offset] * f1 + f2 * fixed_transforms[2];
+      T_step_col[1] = fixed_transforms[M + addr_offset] * f1 + f2 * fixed_transforms[M + 2];
+      T_step_col[2] =
+        fixed_transforms[M + M + addr_offset] * f1 + f2 * fixed_transforms[M + M + 2];
+      T_step_col[3] = fixed_transforms[M + M + M + addr_offset] *
+              f3; // threads 0 and 2 threads get 0.0, remaining two get
+                  // fixed_transforms[3M];
     }
     
     __device__ __forceinline__ void zrot_fn(
@@ -639,9 +1620,8 @@ namespace ppln::collision {
     template <>
     __device__ void fk_approx<ppln::robots::Panda>(
         const float* q,
-        volatile float* sphere_pos_approx, // 12 spheres x 32 robots x 3 coordinates (each column is a robot)
-        float *T, // 32 robots x 4x4 transform matrix , column major
-        const float *fixed_transforms, // 13 x 4x4 fixed transforms
+        volatile float* sphere_pos_approx, // 11 spheres x 16 robots x 3 coordinates (each column is a robot)
+        float *T, // 16 robots x 4x4 transform matrix , column major
         const int tid
     ) {
         // every 4 threads are responsible for one column of the transform matrix T
@@ -660,22 +1640,17 @@ namespace ppln::collision {
         }
         T_col[col_ind] = 1;
 
-        // base link
-        if (col_ind==0){
-            // sphere 0, robot batch_ind
-            sphere_pos_approx[batch_ind * 3+0] = 0;
-            sphere_pos_approx[batch_ind * 3+1] = 0;
-            sphere_pos_approx[batch_ind * 3+2] = 0.5;
-        }
-        transformed_sphere_ind++;
-
-        for (int i = 0; i < 9; ++i) {
-            int ft_addr_start = (i + 1) * 16;
-            if (i < 7) {
-                zrot_fn(&fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
+        // loop through each joint, accumulate transformation matrix, and update sphere positions
+        for (int i = 0; i < 8; ++i) {
+            int ft_addr_start = i * 16;
+            if (panda_joint_types[i] == 0) {
+                xrot_fn(&panda_fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
             }
-            else {
-                fixed_joint_fn(&fixed_transforms[ft_addr_start + col_ind], T_step_col);
+            else if (panda_joint_types[i] == 1) {
+                yrot_fn(&panda_fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
+            }
+            else if (panda_joint_types[i] == 2) {
+                zrot_fn(&panda_fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
             }
 
             for (int r=0; r<4; r++){
@@ -687,50 +1662,16 @@ namespace ppln::collision {
             //     printf("approx i: %d, q[i]: %f, T: %f %f %f %f, %f %f %f %f, %f %f %f %f, %f %f %f %f\n", i, q[i], T_base[0], T_base[1], T_base[2], T_base[3], T_base[4], T_base[5], T_base[6], T_base[7], T_base[8], T_base[9], T_base[10], T_base[11], T_base[12], T_base[13], T_base[14], T_base[15]);
             // }
 
-            while (panda_approx_link_index[transformed_sphere_ind]==i+1) {
+            while (panda_approx_sphere_to_joint[transformed_sphere_ind] == i) {
                 if (col_ind < 3) {
                     // sphere transformed_sphere_ind, robot batch_ind (16 robots), coord col_ind
                     sphere_pos_approx[transformed_sphere_ind * 16 * 3 + batch_ind * 3 + col_ind] = 
-                        T_base[col_ind] * panda_approx_local_xyz[transformed_sphere_ind].x +
-                        T_base[col_ind + M] * panda_approx_local_xyz[transformed_sphere_ind].y +
-                        T_base[col_ind + M*2] * panda_approx_local_xyz[transformed_sphere_ind].z +
+                        T_base[col_ind] * panda_approx_spheres_array[transformed_sphere_ind].x +
+                        T_base[col_ind + M] * panda_approx_spheres_array[transformed_sphere_ind].y +
+                        T_base[col_ind + M*2] * panda_approx_spheres_array[transformed_sphere_ind].z +
                         T_base[col_ind + M*3];
                 }
                 transformed_sphere_ind++;
-            }
-        }
-        // left, right finger
-        for (int i = 9; i < 12; i++) {
-            int ft_addr_start = (i + 1) * 16;
-            fixed_joint_fn(&fixed_transforms[ft_addr_start + col_ind], T_step_col);
-            
-            // for these joints, we don't want to update T_base, so we need to save the old value
-            float old_T_col[4];
-            for (int r=0; r<4; r++){
-                old_T_col[r] = T_col[r];
-                T_col[r] = dot4_col(&T_base[r], T_step_col);
-            }
-
-            // __syncthreads();
-            // if (tid == 0) {
-            //     printf("approx i: %d, T: %f %f %f %f, %f %f %f %f, %f %f %f %f, %f %f %f %f\n", i, T_base[0], T_base[1], T_base[2], T_base[3], T_base[4], T_base[5], T_base[6], T_base[7], T_base[8], T_base[9], T_base[10], T_base[11], T_base[12], T_base[13], T_base[14], T_base[15]);
-            // }
-
-            while (transformed_sphere_ind < PANDA_APPROX_SPHERE_COUNT && panda_approx_link_index[transformed_sphere_ind] == i + 1){
-                if (col_ind < 3){
-                    // sphere transformed_sphere_ind, robot batch_ind (16 robots), coord col_ind
-                    sphere_pos_approx[transformed_sphere_ind * 16 * 3 + batch_ind * 3 + col_ind] = 
-                        T_base[col_ind] * panda_approx_local_xyz[transformed_sphere_ind].x +
-                        T_base[col_ind + M] * panda_approx_local_xyz[transformed_sphere_ind].y +
-                        T_base[col_ind + M*2] * panda_approx_local_xyz[transformed_sphere_ind].z +
-                        T_base[col_ind + M*3];
-                }
-                transformed_sphere_ind++;
-            }
-
-            // restore T_col
-            for (int r=0; r<4; r++){
-                T_col[r] = old_T_col[r];
             }
         }
     }
@@ -738,9 +1679,8 @@ namespace ppln::collision {
     template <>
     __device__ void fk<ppln::robots::Panda>(
         const float* q,
-        volatile float* sphere_pos, // 32 robots x 12 spheres x 3 coordinates
-        float *T, // 32 robots x 4x4 transform matrix
-        const float *fixed_transforms, // 13 x 4x4 fixed transforms
+        volatile float* sphere_pos, // 16 robots x 59 spheres x 3 coordinates
+        float *T, // 16 robots x 4x4 transform matrix
         const int tid
     ) {
         // every 4 threads are responsible for one column of the transform matrix T
@@ -759,21 +1699,17 @@ namespace ppln::collision {
         }
         T_col[col_ind] = 1;
 
-        if (col_ind==0){
-            // sphere 0, robot batch_ind
-            sphere_pos[batch_ind * 3 + 0] = 0;
-            sphere_pos[batch_ind * 3 + 1] = 0;
-            sphere_pos[batch_ind * 3 + 2] = 0.5;
-        }
-        transformed_sphere_ind++;
-
-        for (int i = 0; i < 9; ++i) {
-            int ft_addr_start = (i + 1) * 16;
-            if (i < 7) {
-                zrot_fn(&fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
+        // loop through each joint, accumulate transformation matrix, and update sphere positions
+        for (int i = 0; i < 8; ++i) {
+            int ft_addr_start = i * 16;
+            if (panda_joint_types[i] == 0) {
+                xrot_fn(&panda_fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
             }
-            else {
-                fixed_joint_fn(&fixed_transforms[ft_addr_start + col_ind], T_step_col);
+            else if (panda_joint_types[i] == 1) {
+                yrot_fn(&panda_fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
+            }
+            else if (panda_joint_types[i] == 2) {
+                zrot_fn(&panda_fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
             }
 
             for (int r=0; r<4; r++){
@@ -785,51 +1721,16 @@ namespace ppln::collision {
             //     printf("i: %d, q[i]: %f, T: %f %f %f %f, %f %f %f %f, %f %f %f %f, %f %f %f %f\n", i, q[i], T_base[0], T_base[1], T_base[2], T_base[3], T_base[4], T_base[5], T_base[6], T_base[7], T_base[8], T_base[9], T_base[10], T_base[11], T_base[12], T_base[13], T_base[14], T_base[15]);
             // }
 
-            while (panda_link_index[transformed_sphere_ind]==i+1) {
+            while (panda_sphere_to_joint[transformed_sphere_ind]==i) {
                 if (col_ind < 3) {
                     // sphere transformed_sphere_ind, robot batch_ind (16 robots), coord col_ind
                     sphere_pos[transformed_sphere_ind * 16 * 3 + batch_ind * 3 + col_ind] = 
-                        T_base[col_ind] * panda_local_xyz[transformed_sphere_ind].x +
-                        T_base[col_ind + M] * panda_local_xyz[transformed_sphere_ind].y +
-                        T_base[col_ind + M*2] * panda_local_xyz[transformed_sphere_ind].z +
+                        T_base[col_ind] * panda_spheres_array[transformed_sphere_ind].x +
+                        T_base[col_ind + M] * panda_spheres_array[transformed_sphere_ind].y +
+                        T_base[col_ind + M*2] * panda_spheres_array[transformed_sphere_ind].z +
                         T_base[col_ind + M*3];
                 }
                 transformed_sphere_ind++;
-            }
-        }
-        // left, right finger
-        #pragma unroll
-        for (int i = 9; i < 12; i++) {
-            int ft_addr_start = (i + 1) * 16;
-            fixed_joint_fn(&fixed_transforms[ft_addr_start + col_ind], T_step_col);
-            
-            // for these joints, we don't want to update T_base, so we need to save the old value
-            float old_T_col[4];
-            for (int r=0; r<4; r++){
-                old_T_col[r] = T_col[r];
-                T_col[r] = dot4_col(&T_base[r], T_step_col);
-            }
-
-            // __syncthreads();
-            // if (tid == 0) {
-            //     printf("i: %d, T: %f %f %f %f, %f %f %f %f, %f %f %f %f, %f %f %f %f\n", i, T_base[0], T_base[1], T_base[2], T_base[3], T_base[4], T_base[5], T_base[6], T_base[7], T_base[8], T_base[9], T_base[10], T_base[11], T_base[12], T_base[13], T_base[14], T_base[15]);
-            // }
-
-            while (transformed_sphere_ind < PANDA_SPHERE_COUNT && panda_link_index[transformed_sphere_ind] == i + 1){
-                if (col_ind < 3){
-                    // sphere transformed_sphere_ind, robot batch_ind (16 robots), coord col_ind
-                    sphere_pos[transformed_sphere_ind * 16 * 3 + batch_ind * 3 + col_ind] = 
-                        T_base[col_ind] * panda_local_xyz[transformed_sphere_ind].x +
-                        T_base[col_ind + M] * panda_local_xyz[transformed_sphere_ind].y +
-                        T_base[col_ind + M*2] * panda_local_xyz[transformed_sphere_ind].z +
-                        T_base[col_ind + M*3];
-                }
-                transformed_sphere_ind++;
-            }
-
-            // restore T_col
-            for (int r=0; r<4; r++){
-                T_col[r] = old_T_col[r];
             }
         }
     }
@@ -838,23 +1739,26 @@ namespace ppln::collision {
 
     // 4 threads per discretized motion for self-collision check
     template <>
-    __device__ bool self_collision_check_approx<ppln::robots::Panda>(volatile float* sphere_pos_approx, volatile int* link_approx_CC, const int tid){
+    __device__ bool self_collision_check_approx<ppln::robots::Panda>(volatile float* sphere_pos_approx, volatile int* joint_in_collision, const int tid){
         const int thread_ind = tid%4;
         const int batch_ind = tid/4;
 
-        #pragma unroll
-        for (int i=thread_ind; i<PANDA_APPROX_SPHERE_COUNT; i+=4){
-            // sphere i, robot batch_ind (16 robots)
-            float check_sphere[3] = {sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 0], sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 1], sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 2]};
-            for (int j=panda_approx_startCC_ind[i]; j<PANDA_APPROX_SPHERE_COUNT; j++){
-                //if (panda_link_index[i]==2 && panda_link_index[j]==6) continue;
-                // sphere j, robot batch_ind (16 robots)
-                float check_pos[3] = {sphere_pos_approx[j * 16 * 3 + batch_ind * 3 + 0], sphere_pos_approx[j * 16 * 3 + batch_ind * 3 + 1], sphere_pos_approx[j * 16 * 3 + batch_ind * 3 + 2]};
-                if (sphere_sphere_self_collision(check_sphere[0], check_sphere[1], check_sphere[2], panda_approx_local_xyz[i].w, check_pos[0], check_pos[1], check_pos[2], panda_approx_local_xyz[j].w)){ 
-                    //if (batch_ind==0) printf("self-collision approx: sphere_ind %d %d, coord %f %f %f, %f %f %f\n", i, j, check_sphere[0], check_sphere[1], check_sphere[2], check_pos[0], check_pos[1], check_pos[2]);
-                    atomicAdd((int*)&link_approx_CC[20*batch_ind +panda_approx_link_index[i]], 1);
-                    return false;
-                }
+        for (int i = thread_ind; i < 21; i+=4) {
+            int sphere_1_ind = panda_approx_self_cc_pairs[i][0];
+            int sphere_2_ind = panda_approx_self_cc_pairs[i][1];
+            if (sphere_sphere_self_collision(
+                sphere_pos_approx[sphere_1_ind * 16 * 3 + batch_ind * 3 + 0],
+                sphere_pos_approx[sphere_1_ind * 16 * 3 + batch_ind * 3 + 1],
+                sphere_pos_approx[sphere_1_ind * 16 * 3 + batch_ind * 3 + 2],
+                panda_approx_spheres_array[sphere_1_ind].w,
+                sphere_pos_approx[sphere_2_ind * 16 * 3 + batch_ind * 3 + 0],
+                sphere_pos_approx[sphere_2_ind * 16 * 3 + batch_ind * 3 + 1],
+                sphere_pos_approx[sphere_2_ind * 16 * 3 + batch_ind * 3 + 2],
+                panda_approx_spheres_array[sphere_2_ind].w
+            )) {
+                atomicAdd((int*)&joint_in_collision[20*batch_ind + panda_approx_sphere_to_joint[sphere_1_ind]], 1);
+                atomicAdd((int*)&joint_in_collision[20*batch_ind + panda_approx_sphere_to_joint[sphere_2_ind]], 1);
+                return false;
             }
         }
         return true;
@@ -863,33 +1767,55 @@ namespace ppln::collision {
 
     // 4 threads per discretized motion for self-collision check
     template <>
-    __device__ bool self_collision_check<ppln::robots::Panda>(volatile float* sphere_pos, volatile int* link_approx_CC, const int tid){
+    __device__ bool self_collision_check<ppln::robots::Panda>(volatile float* sphere_pos, volatile int* joint_in_collision, const int tid){
         const int thread_ind = tid%4;
         const int batch_ind = tid/4;
 
         // add approximate link check (self-collision)
         
-        #pragma unroll
-        for (int i=thread_ind; i<PANDA_STOP_SELF_CC; i+=4){
-            if (link_approx_CC[20*batch_ind +panda_link_index[i]]==0) continue;
-            // sphere i, robot batch_ind (16 robots)
-            float check_sphere[3] = {sphere_pos[i * 16 * 3 + batch_ind * 3 + 0], sphere_pos[i * 16 * 3 + batch_ind * 3 + 1], sphere_pos[i * 16 * 3 + batch_ind * 3 + 2]};
+        // #pragma unroll
+        // for (int i=thread_ind; i<PANDA_STOP_SELF_CC; i+=4){
+        //     if (link_approx_CC[20*batch_ind +panda_link_index[i]]==0) continue;
+        //     // sphere i, robot batch_ind (16 robots)
+        //     float check_sphere[3] = {sphere_pos[i * 16 * 3 + batch_ind * 3 + 0], sphere_pos[i * 16 * 3 + batch_ind * 3 + 1], sphere_pos[i * 16 * 3 + batch_ind * 3 + 2]};
             
-            for (int j=panda_startCC_ind[i]; j<PANDA_SPHERE_COUNT; j++){
-                //if (panda_link_index[i]==2 && panda_link_index[j]==6) continue;
-                // sphere j, robot batch_ind (16 robots)
-                float check_pos[3] = {sphere_pos[j * 16 * 3 + batch_ind * 3 + 0], sphere_pos[j * 16 * 3 + batch_ind * 3 + 1], sphere_pos[j * 16 * 3 + batch_ind * 3 + 2]};
-                if (sphere_sphere_self_collision(check_sphere[0], check_sphere[1], check_sphere[2], panda_local_xyz[i].w, check_pos[0], check_pos[1], check_pos[2], panda_local_xyz[j].w)){ 
-                    return false;
-                }
+        //     for (int j=panda_startCC_ind[i]; j<PANDA_SPHERE_COUNT; j++){
+        //         //if (panda_link_index[i]==2 && panda_link_index[j]==6) continue;
+        //         // sphere j, robot batch_ind (16 robots)
+        //         float check_pos[3] = {sphere_pos[j * 16 * 3 + batch_ind * 3 + 0], sphere_pos[j * 16 * 3 + batch_ind * 3 + 1], sphere_pos[j * 16 * 3 + batch_ind * 3 + 2]};
+        //         if (sphere_sphere_self_collision(check_sphere[0], check_sphere[1], check_sphere[2], panda_local_xyz[i].w, check_pos[0], check_pos[1], check_pos[2], panda_local_xyz[j].w)){ 
+        //             return false;
+        //         }
+        //     }
+        // }
+        // return true;
+
+        for (int i = thread_ind; i < 690; i+=4) {
+            int sphere_1_ind = panda_self_cc_pairs[i][0];
+            int sphere_2_ind = panda_self_cc_pairs[i][1];
+            if (joint_in_collision[20*batch_ind + panda_sphere_to_joint[sphere_1_ind]] == 0) continue;
+            if (sphere_sphere_self_collision(
+                sphere_pos[sphere_1_ind * 16 * 3 + batch_ind * 3 + 0],
+                sphere_pos[sphere_1_ind * 16 * 3 + batch_ind * 3 + 1],
+                sphere_pos[sphere_1_ind * 16 * 3 + batch_ind * 3 + 2],
+                panda_spheres_array[sphere_1_ind].w,
+                sphere_pos[sphere_2_ind * 16 * 3 + batch_ind * 3 + 0],
+                sphere_pos[sphere_2_ind * 16 * 3 + batch_ind * 3 + 1],
+                sphere_pos[sphere_2_ind * 16 * 3 + batch_ind * 3 + 2],
+                panda_spheres_array[sphere_2_ind].w
+            )) {
+                atomicAdd((int*)&joint_in_collision[20*batch_ind + panda_sphere_to_joint[sphere_1_ind]], 1);
+                atomicAdd((int*)&joint_in_collision[20*batch_ind + panda_sphere_to_joint[sphere_2_ind]], 1);
+                return false;
             }
         }
         return true;
+
     }
 
     // 4 threads per discretized motion for env collision check
     template <>
-    __device__ bool env_collision_check<ppln::robots::Panda>(volatile float* sphere_pos, volatile int* link_approx_CC, ppln::collision::Environment<float> *env, const int tid){
+    __device__ bool env_collision_check<ppln::robots::Panda>(volatile float* sphere_pos, volatile int* joint_in_collision, ppln::collision::Environment<float> *env, const int tid){
         const int thread_ind = tid%4;
         const int batch_ind = tid/4;
 
@@ -899,7 +1825,15 @@ namespace ppln::collision {
         // int i=PANDA_SPHERE_COUNT/4*thread_ind; i<PANDA_SPHERE_COUNT/4*(thread_ind+1); i++
         for (int i=thread_ind; i<PANDA_SPHERE_COUNT; i+=4){
             // sphere i, robot batch_ind (16 robots)
-            if (link_approx_CC[20*batch_ind +panda_link_index[i]]>0 && sphere_environment_in_collision(env, sphere_pos[i * 16 * 3 + batch_ind * 3 + 0], sphere_pos[i * 16 * 3 + batch_ind * 3 + 1], sphere_pos[i * 16 * 3 + batch_ind * 3 + 2], panda_local_xyz[i].w)){
+            if (joint_in_collision[20*batch_ind +panda_sphere_to_joint[i]] > 0 && 
+                sphere_environment_in_collision(
+                    env,
+                    sphere_pos[i * 16 * 3 + batch_ind * 3 + 0],
+                    sphere_pos[i * 16 * 3 + batch_ind * 3 + 1],
+                    sphere_pos[i * 16 * 3 + batch_ind * 3 + 2],
+                    panda_spheres_array[i].w
+                )
+            ) {
                 return false;
             } 
         }
@@ -908,27 +1842,12 @@ namespace ppln::collision {
         //if (link_approx_CC[20*batch_ind +panda_link_index[i]]>0 && sphere_environment_in_collision(env, sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3+1], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3+2], panda_local_xyz[i].w)){
         //    return false;
         //}
-        
-        
-
-        // inefficient, just for debugging
-        /*
-        for (int i=0; i<PANDA_SPHERE_COUNT; i++){
-            if (sphere_environment_in_collision(env, sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3+1], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3+2], panda_local_xyz[i].w)){
-                return false;
-            } 
-            // following just for debug, deleter later
-            if (thread_ind==0) printf("tid %d, sphere: %f %f %f\n", tid, sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3+1], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3+2]);
-        }
-        */
-        
-        //if (blockIdx.x==0) printf("sphere check start: %d, check end %d\n", PANDA_SPHERE_COUNT/4*thread_ind, min(PANDA_SPHERE_COUNT/4*(thread_ind+1), PANDA_SPHERE_COUNT));
         return true;
     }
 
     // 4 threads per discretized motion for env collision check
     template <>
-    __device__ bool env_collision_check_approx<ppln::robots::Panda>(volatile float* sphere_pos_approx, volatile int* link_approx_CC, ppln::collision::Environment<float> *env, const int tid){
+    __device__ bool env_collision_check_approx<ppln::robots::Panda>(volatile float* sphere_pos_approx, volatile int* joint_in_collision, ppln::collision::Environment<float> *env, const int tid){
         const int thread_ind = tid%4;
         const int batch_ind = tid/4;
         bool out=true;
@@ -938,31 +1857,16 @@ namespace ppln::collision {
         for (int i=PANDA_APPROX_SPHERE_COUNT/4*thread_ind; i<PANDA_APPROX_SPHERE_COUNT/4*(thread_ind+1); i++){
             // sphere i, robot batch_ind (16 robots)
             if (sphere_environment_in_collision(env, sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 0], sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 1], sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 2], panda_approx_local_xyz[i].w)){
-                atomicAdd((int*)&link_approx_CC[20*batch_ind +panda_approx_link_index[i]],1);
+                atomicAdd((int*)&joint_in_collision[20*batch_ind +panda_approx_sphere_to_joint[i]],1);
                 out=false;
             } 
         }
 
         int i = PANDA_APPROX_SPHERE_COUNT-1-thread_ind;
         if (sphere_environment_in_collision(env, sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 0], sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 1], sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 2], panda_approx_local_xyz[i].w)){
-            atomicAdd((int*)&link_approx_CC[20*batch_ind +panda_approx_link_index[i]],1);
+            atomicAdd((int*)&joint_in_collision[20*batch_ind +panda_approx_sphere_to_joint[i]],1);
             out=false;
         }
-        
-        
-
-        // inefficient, just for debugging
-        /*
-        for (int i=0; i<PANDA_SPHERE_COUNT; i++){
-            if (sphere_environment_in_collision(env, sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3+1], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3+2], panda_local_xyz[i].w)){
-                return false;
-            } 
-            // following just for debug, deleter later
-            if (thread_ind==0) printf("tid %d, sphere: %f %f %f\n", tid, sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3+1], sphere_pos[batch_ind * PANDA_SPHERE_COUNT * 3+i*3+2]);
-        }
-        */
-        
-        //if (blockIdx.x==0) printf("sphere check start: %d, check end %d\n", PANDA_SPHERE_COUNT/4*thread_ind, min(PANDA_SPHERE_COUNT/4*(thread_ind+1), PANDA_SPHERE_COUNT));
         return out;
     }
 
