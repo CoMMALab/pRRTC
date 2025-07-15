@@ -1,3 +1,9 @@
 [submodule "extern/vamp"]
 	path = extern/vamp
 	url = https://github.com/KavrakiLab/vamp.git
+[submodule "extern/nvblox"]
+	path = extern/nvblox
+	url = https://github.com/nvidia-isaac/nvblox.git
+[submodule "extern/pdqsort"]
+	path = extern/pdqsort
+	url = https://github.com/orlp/pdqsort.git
