@@ -485,7 +485,7 @@ namespace ppln::collision {
     // cc returns false if the config does collide with an obstacle, returns true if the config does not collide
 
     template <typename Robot>
-    __device__ __forceinline__ void fk(const float *config, volatile float* sphere_pos, float *T, const float *fixed_transforms, const int tid);
+    __device__ __forceinline__ void fk(const float *config, volatile float* sphere_pos, float *T, const int tid);
 
     template <typename Robot>
     __device__ __forceinline__ bool self_collision_check(volatile float* sphere_pos, volatile int* link_approx_CC, const int tid);
@@ -494,7 +494,7 @@ namespace ppln::collision {
     __device__ __forceinline__ bool env_collision_check(volatile float* sphere_pos, volatile int* link_approx_CC, ppln::collision::Environment<float> *env, const int tid);
 
     template <typename Robot>
-    __device__ __forceinline__ void fk_approx(const float *config, volatile float* sphere_pos_approx, float *T, const float *fixed_transforms, const int tid);
+    __device__ __forceinline__ void fk_approx(const float *config, volatile float* sphere_pos_approx, float *T, const int tid);
 
     template <typename Robot>
     __device__ __forceinline__ bool self_collision_check_approx(volatile float* sphere_pos_approx, volatile int* link_approx_CC, const int tid);
@@ -558,7 +558,7 @@ namespace ppln::collision {
     
     
     
-    __device__ __constant__ float panda_approx_sphere_to_joint[] = {
+    __device__ __constant__ int panda_approx_sphere_to_joint[] = {
         0,
         1,
         2,
@@ -1399,7 +1399,7 @@ namespace ppln::collision {
         
     };
 
-    __device__ __constant__ float panda_sphere_to_joint[] = {
+    __device__ __constant__ int panda_sphere_to_joint[] = {
         0,
         1,
         1,
@@ -1485,7 +1485,6 @@ namespace ppln::collision {
         T_step_col[3] = fixed_transform[M * 3];
     }
 
-    template<typename scalar_t>
     __device__ __forceinline__ void xrot_fn(
         const float *fixed_transforms,
         const float angle,
@@ -1530,7 +1529,6 @@ namespace ppln::collision {
     }
 
     // version with no control flow
-    template<typename scalar_t>
     __device__ __forceinline__ void yrot_fn(
         const float *fixed_transforms,
         const float angle,
@@ -1640,24 +1638,32 @@ namespace ppln::collision {
         }
         T_col[col_ind] = 1;
 
+        if (col_ind == 0) {
+            sphere_pos_approx[batch_ind * 16 * 3 + 0] = 0;
+            sphere_pos_approx[batch_ind * 16 * 3 + 1] = 0;
+            sphere_pos_approx[batch_ind * 16 * 3 + 2] = 0.05;
+        }
+        transformed_sphere_ind++;
+
         // loop through each joint, accumulate transformation matrix, and update sphere positions
-        for (int i = 0; i < 8; ++i) {
+        for (int i = 1; i < 8; ++i) {
+            // printf("i: %d, q[i - 1]: %f\n", i, q[i - 1]);
             int ft_addr_start = i * 16;
             if (panda_joint_types[i] == 0) {
-                xrot_fn(&panda_fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
+                xrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
             }
             else if (panda_joint_types[i] == 1) {
-                yrot_fn(&panda_fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
+                yrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
             }
             else if (panda_joint_types[i] == 2) {
-                zrot_fn(&panda_fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
+                zrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
             }
 
             for (int r=0; r<4; r++){
                 T_col[r] = dot4_col(&T_base[r], T_step_col);
             }
 
-            // __syncthreads();
+            __syncthreads();
             // if (tid == 0) {
             //     printf("approx i: %d, q[i]: %f, T: %f %f %f %f, %f %f %f %f, %f %f %f %f, %f %f %f %f\n", i, q[i], T_base[0], T_base[1], T_base[2], T_base[3], T_base[4], T_base[5], T_base[6], T_base[7], T_base[8], T_base[9], T_base[10], T_base[11], T_base[12], T_base[13], T_base[14], T_base[15]);
             // }
@@ -1699,17 +1705,24 @@ namespace ppln::collision {
         }
         T_col[col_ind] = 1;
 
+        if (col_ind == 0) {
+           sphere_pos[batch_ind * 16 * 3 + 0] = 0;
+           sphere_pos[batch_ind * 16 * 3 + 1] = 0;
+           sphere_pos[batch_ind * 16 * 3 + 2] = 0.05;
+        }
+        transformed_sphere_ind++;
+
         // loop through each joint, accumulate transformation matrix, and update sphere positions
-        for (int i = 0; i < 8; ++i) {
+        for (int i = 1; i < 8; ++i) {
             int ft_addr_start = i * 16;
             if (panda_joint_types[i] == 0) {
-                xrot_fn(&panda_fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
+                xrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
             }
             else if (panda_joint_types[i] == 1) {
-                yrot_fn(&panda_fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
+                yrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
             }
             else if (panda_joint_types[i] == 2) {
-                zrot_fn(&panda_fixed_transforms[ft_addr_start], q[i], col_ind, T_step_col);
+                zrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
             }
 
             for (int r=0; r<4; r++){
@@ -1756,8 +1769,13 @@ namespace ppln::collision {
                 sphere_pos_approx[sphere_2_ind * 16 * 3 + batch_ind * 3 + 2],
                 panda_approx_spheres_array[sphere_2_ind].w
             )) {
+                // if (tid == 0) {
+                //     printf("collision between %d and %d\n", sphere_1_ind, sphere_2_ind);
+                //     printf("sphere %d: %f %f %f\n", sphere_1_ind, sphere_pos_approx[sphere_1_ind * 16 * 3 + batch_ind * 3 + 0], sphere_pos_approx[sphere_1_ind * 16 * 3 + batch_ind * 3 + 1], sphere_pos_approx[sphere_1_ind * 16 * 3 + batch_ind * 3 + 2]);
+                //     printf("sphere %d: %f %f %f\n", sphere_2_ind, sphere_pos_approx[sphere_2_ind * 16 * 3 + batch_ind * 3 + 0], sphere_pos_approx[sphere_2_ind * 16 * 3 + batch_ind * 3 + 1], sphere_pos_approx[sphere_2_ind * 16 * 3 + batch_ind * 3 + 2]);
+                // }
                 atomicAdd((int*)&joint_in_collision[20*batch_ind + panda_approx_sphere_to_joint[sphere_1_ind]], 1);
-                atomicAdd((int*)&joint_in_collision[20*batch_ind + panda_approx_sphere_to_joint[sphere_2_ind]], 1);
+                // atomicAdd((int*)&joint_in_collision[20*batch_ind + panda_approx_sphere_to_joint[sphere_2_ind]], 1);
                 return false;
             }
         }

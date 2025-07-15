@@ -343,8 +343,9 @@ namespace pRRTC {
         int iter = 0;
 
         while (true) {
-
             if (tid == 0) {
+                // printf("iter: %d\n", iter);
+                // printf("tree size: %d\n", atomic_free_index[0]);
                 iter++;
                 if (iter > d_settings.max_iters) {
                     atomicCAS((int *)&solved, 0, -1);
@@ -444,6 +445,7 @@ namespace pRRTC {
             __syncthreads();
 
             if (should_skip) {
+                // if (tid == 0) printf("skipping\n");
                 continue;
             }
             __syncthreads();
@@ -465,7 +467,7 @@ namespace pRRTC {
             // if (tid == 0) {
             //     printf("q: %f %f %f %f %f %f %f\n", interp_cfg[0], interp_cfg[1], interp_cfg[2], interp_cfg[3], interp_cfg[4], interp_cfg[5], interp_cfg[6]);
             // }
-            ppln::collision::fk_approx<Robot>(interp_cfg, sphere_pos, T, ppln::collision::panda_fixed_transforms, tid);
+            ppln::collision::fk_approx<Robot>(interp_cfg, sphere_pos, T, tid);
             __syncthreads();
             bool config_in_collision2_approx = not ppln::collision::env_collision_check_approx<Robot>(sphere_pos, link_CC, env, tid);
             atomicOr((unsigned int *)&local_cc_result[0], config_in_collision2_approx ? 1u : 0u);
@@ -473,9 +475,10 @@ namespace pRRTC {
             __syncthreads();
             // if collision found in approx env check, proceed to detailed env check
             if (local_cc_result[0]==1){
+                // if (tid == 0) printf("approx env collision\n");
                 if (tid==0) local_cc_result[0]=0;
                 __syncthreads();
-                ppln::collision::fk<Robot>(interp_cfg, sphere_pos, T, ppln::collision::panda_fixed_transforms, tid);
+                ppln::collision::fk<Robot>(interp_cfg, sphere_pos, T, tid);
                 detailed_FK=1;
                 __syncthreads();
                 bool config_in_collision2 = not ppln::collision::env_collision_check<Robot>(sphere_pos, link_CC, env, tid);
@@ -495,10 +498,11 @@ namespace pRRTC {
                 __syncthreads();
                 // if collision found in approx self check, proceed to detailed self check
                 if (local_cc_result[0]==1){
+                    // if (tid == 0) printf("approx self collision\n");
                     if (tid==0) local_cc_result[0]=0;
                     __syncthreads();
                     if (detailed_FK==0){
-                        ppln::collision::fk<Robot>(interp_cfg, sphere_pos, T, ppln::collision::panda_fixed_transforms, tid);
+                        ppln::collision::fk<Robot>(interp_cfg, sphere_pos, T, tid);
                         detailed_FK=1;
                         __syncthreads();
                     }
@@ -514,7 +518,7 @@ namespace pRRTC {
             if (edge_good) {
                 // grow tree
                 if (tid == 0) {
-                    
+                    // printf("edge good\n");
                     index = atomicAdd((int *)&atomic_free_index[t_tree_id], 1);
                     if (index >= d_settings.max_samples) solved = -1;
                     
@@ -604,16 +608,17 @@ namespace pRRTC {
                         link_CC[r]=0;
                     }
                     __syncthreads();
-                    ppln::collision::fk_approx<Robot>(interp_cfg, sphere_pos, T, ppln::collision::panda_fixed_transforms, tid);
+                    ppln::collision::fk_approx<Robot>(interp_cfg, sphere_pos, T, tid);
                     __syncthreads();
                     bool config_in_collision2_approx = not ppln::collision::env_collision_check_approx<Robot>(sphere_pos, link_CC, env, tid);
                     atomicOr((unsigned int *)&local_cc_result[0], config_in_collision2_approx ? 1u : 0u);
                     __syncthreads();
                     // if collision found in approx env check, proceed to detailed env check
                     if (local_cc_result[0]==1){
+                        // if (tid == 0) printf("approx env collision in extension\n");
                         if (tid==0) local_cc_result[0]=0;
                         __syncthreads();
-                        ppln::collision::fk<Robot>(interp_cfg, sphere_pos, T, ppln::collision::panda_fixed_transforms, tid);
+                        ppln::collision::fk<Robot>(interp_cfg, sphere_pos, T, tid);
                         detailed_FK=1;
                         __syncthreads();
                         bool config_in_collision2 = not ppln::collision::env_collision_check<Robot>(sphere_pos, link_CC, env, tid);
@@ -635,10 +640,11 @@ namespace pRRTC {
                         __syncthreads();
                         // if collision found in approx self check, proceed to detailed self check
                         if (local_cc_result[0]==1){
+                            // if (tid == 0) printf("approx self collision in extension\n");
                             if (tid==0) local_cc_result[0]=0;
                             __syncthreads();
                             if (detailed_FK==0){
-                                ppln::collision::fk<Robot>(interp_cfg, sphere_pos, T, ppln::collision::panda_fixed_transforms, tid);
+                                ppln::collision::fk<Robot>(interp_cfg, sphere_pos, T, tid);
                                 detailed_FK=1;
                                 __syncthreads();
                             }
@@ -702,6 +708,7 @@ namespace pRRTC {
                 }
             }
             else if (d_settings.dynamic_domain && tid == 0) {      
+                // printf("no config added\n");
                 volatile float *radius_ptr = &radii[t_tree_id][sindex[0]];
                 float old_radius, new_radius;
                 int expected, desired;
