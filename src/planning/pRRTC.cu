@@ -3,6 +3,7 @@
 #include "utils.cuh"
 #include "pRRTC_settings.hh"
 #include "src/collision/environment.hh"
+#include "src/robots/panda.cuh"
 
 #include <curand.h>
 #include <curand_kernel.h>
