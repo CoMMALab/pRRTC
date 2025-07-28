@@ -3,7 +3,8 @@
 #include "utils.cuh"
 #include "pRRTC_settings.hh"
 #include "src/collision/environment.hh"
-#include "src/robots/panda.cuh"
+#include "src/robots/panda_test.cuh"
+#include "src/robots/fetch.cuh"
 
 #include <curand.h>
 #include <curand_kernel.h>
@@ -27,6 +28,7 @@ namespace pRRTC {
     __device__ volatile int solved = 0;
     __device__ volatile int atomic_free_index[2]; // separate for tree_a and tree_b
     __device__ volatile int nodes_size[2];
+    __device__ volatile int completed_nodes[2]; // track completed nodes for each tree
     constexpr int MAX_PATH_SIZE = 5000;
     __device__ float path[2][MAX_PATH_SIZE]; // solution path segments for tree_a, and tree_b
     __device__ int path_size[2] = {0, 0};
@@ -273,6 +275,8 @@ namespace pRRTC {
         atomic_free_index[1] = 0;
         nodes_size[0] = 0;
         nodes_size[1] = 0;
+        completed_nodes[0] = 0;
+        completed_nodes[1] = 0;
         
         path_size[0] = 0;
         path_size[1] = 0;
@@ -294,14 +298,6 @@ namespace pRRTC {
         if (error != cudaSuccess) {
             printf("CUDA error: %s\n", cudaGetErrorString(error));
         }
-    }
-
-    __device__ __forceinline__ bool check_partially_written(float *node, int dim) {
-        #pragma unroll
-        for (int i = 0; i < dim; i++) {
-            if (node[i] == UNWRITTEN_VAL) return true;
-        }
-        return false;
     }
     
     template <typename Robot>
@@ -336,7 +332,7 @@ namespace pRRTC {
         __shared__ float vec[dim];
         __shared__ unsigned int n_extensions;
         __shared__ bool should_skip;
-        __align__(16) __shared__ volatile float sphere_pos[7800]; // ~assuming max 80 spheres with granularity 32, each has x y z coordinates
+        __align__(16) __shared__ volatile float sphere_pos[7800]; // ~assuming max 120 spheres with granularity 16, each has x y z coordinates
         // __shared__ volatile float sphere_pos_approx[1200]; // ~assuming 12 spheres with granularity 32, each has x y z coordinates
         __align__(16) __shared__ volatile int link_CC[640]; //assuming max granularity 32, max number of links 20
         __align__(16) __shared__ float T[16 * 16]; // 16 robots x 4x4 transform matrix
@@ -408,9 +404,8 @@ namespace pRRTC {
             float local_min_dist = FLT_MAX;
             int local_near_idx = 0;
             float dist;
-            int size = atomic_free_index[t_tree_id];
+            int size = min(atomic_free_index[t_tree_id], completed_nodes[t_tree_id]);
             for (int i = tid; i < size; i += blockDim.x) {
-                if (check_partially_written(&t_nodes[i * dim], dim)) break;
                 dist = device_utils::sq_l2_dist((float *)&t_nodes[i * dim], (float *) config, dim);
                 if (dist < local_min_dist) {
                     local_min_dist = dist;
@@ -544,15 +539,17 @@ namespace pRRTC {
                 if (tid < dim) {
                     t_nodes[index * dim + tid] = config[tid];
                 }
-                if (tid == 0) __threadfence();
+                if (tid == 0) {
+                    atomicAdd((int*)&completed_nodes[t_tree_id], 1);
+                    __threadfence();
+                }
                 __syncthreads();
 
                 // connect
                 local_min_dist = FLT_MAX;
                 local_near_idx = 0;
-                int size = atomic_free_index[o_tree_id];
+                int size = min(atomic_free_index[o_tree_id], completed_nodes[o_tree_id]);
                 for (unsigned int i = tid; i < size; i += blockDim.x) {
-                    if (check_partially_written(&o_nodes[i * dim], dim)) break;
                     dist = device_utils::sq_l2_dist((float *)&o_nodes[i * dim], (float *)config, dim);
                     if (dist < local_min_dist) {
                         local_min_dist = dist;
@@ -671,7 +668,10 @@ namespace pRRTC {
                         config[tid] = config[tid] + vec[tid];
                         t_nodes[index * dim + tid] = config[tid];
                     }
-                    if (tid == 0) __threadfence();
+                    if (tid == 0) {
+                        atomicAdd((int*)&completed_nodes[t_tree_id], 1);
+                        __threadfence();
+                    }
                     __syncthreads();
                     i_extensions++;
                     __syncthreads();
@@ -797,6 +797,10 @@ namespace pRRTC {
         cudaMemcpyToSymbol(atomic_free_index, &h_free_index, sizeof(int) * 2);
         cudaMemcpyToSymbol(nodes_size, &h_free_index, sizeof(int) * 2);
         
+        // initialize completed_nodes counter
+        int h_completed_nodes[2] = {1, num_goals}; // start and goals are already written
+        cudaMemcpyToSymbol(completed_nodes, &h_completed_nodes, sizeof(int) * 2);
+        
         // allocate for obstacles
         ppln::collision::Environment<float> *env;
         setup_environment_on_device(env, h_environment);
@@ -895,7 +899,7 @@ namespace pRRTC {
 
     //template PlannerResult<typename ppln::robots::Sphere> solve<ppln::robots::Sphere>(std::array<float, 3>&, std::vector<std::array<float, 3>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
     template PlannerResult<typename ppln::robots::Panda> solve<ppln::robots::Panda>(std::array<float, 7>&, std::vector<std::array<float, 7>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
-    //template PlannerResult<typename ppln::robots::Fetch> solve<ppln::robots::Fetch>(std::array<float, 8>&, std::vector<std::array<float, 8>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
+    template PlannerResult<typename ppln::robots::Fetch> solve<ppln::robots::Fetch>(std::array<float, 8>&, std::vector<std::array<float, 8>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
     //template PlannerResult<typename ppln::robots::Baxter> solve<ppln::robots::Baxter>(std::array<float, 14>&, std::vector<std::array<float, 14>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
 
 }

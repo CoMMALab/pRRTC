@@ -3,6 +3,9 @@
 #include <vector>
 #include <array>
 #include <chrono>
+#include <iostream>
+#include <sstream>
+#include <cmath>
 
 #include "Robots.hh"
 #include "src/collision/environment.hh"
@@ -49,6 +52,16 @@ inline void print_cfg(typename Robot::Configuration &config) {
     }
     std::cout << "\n";
 }
+
+template <typename Robot>
+inline void print_cfg_to_ss(typename Robot::Configuration &config, std::stringstream &out) {
+    for (int i = 0; i < Robot::dimension; i++) {
+        out << config[i] << " ";
+    }
+    out << "\\n";
+}
+
+
 
 inline std::size_t get_elapsed_nanoseconds(const std::chrono::time_point<std::chrono::steady_clock> &start)
 {

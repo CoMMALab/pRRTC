@@ -129,7 +129,7 @@ int main(int argc, char* argv[]) {
     auto env = problem_dict_to_env(data, name);
     struct pRRTC_settings settings;
     settings.num_new_configs = 512; //usually:512
-    settings.max_iters = 1000000;
+    settings.max_iters = 100000000;
     settings.granularity = 16;
     settings.range = 0.5;
     settings.balance = 2;
@@ -139,13 +139,11 @@ int main(int argc, char* argv[]) {
     settings.dd_min_radius = 1.0;
     settings.dd_alpha = 0.0001;
     if (robot_name == "fetch") {
-        //run_planner<robots::Fetch>(data, env, settings);
-        ;
+        run_planner<robots::Fetch>(data, env, settings);
     } else if (robot_name == "panda") {
         run_planner<robots::Panda>(data, env, settings);
     } else if (robot_name == "baxter") {
-        //run_planner<robots::Baxter>(data, env, settings);
-        ;
+        // run_planner<robots::Baxter>(data, env, settings);
     } else {
         std::cerr << "Unsupported robot type: " << robot_name << "\n";
         return 1;

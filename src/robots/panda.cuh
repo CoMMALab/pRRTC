@@ -297,32 +297,34 @@ namespace ppln::collision {
         }
         T_col[col_ind] = 1;
 
-        if (col_ind == 0) {
-            sphere_pos_approx[batch_ind * 16 * 3 + 0] = 0;
-            sphere_pos_approx[batch_ind * 16 * 3 + 1] = 0;
-            sphere_pos_approx[batch_ind * 16 * 3 + 2] = 0.05;
-        }
-        transformed_sphere_ind++;
+        // if (col_ind == 0) {
+        //     sphere_pos_approx[batch_ind * 16 * 3 + 0] = 0;
+        //     sphere_pos_approx[batch_ind * 16 * 3 + 1] = 0;
+        //     sphere_pos_approx[batch_ind * 16 * 3 + 2] = 0.05;
+        // }
+        // transformed_sphere_ind++;
 
         // loop through each joint, accumulate transformation matrix, and update sphere positions
-        for (int i = 1; i < 8; ++i) {
+        for (int i = 0; i < 8; ++i) {
             // printf("i: %d, q[i - 1]: %f\n", i, q[i - 1]);
-            int ft_addr_start = i * 16;
-            if (panda_joint_types[i] == 0) {
-                xrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
-            }
-            else if (panda_joint_types[i] == 1) {
-                yrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
-            }
-            else if (panda_joint_types[i] == 2) {
-                zrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
+            if (i > 0) {
+                int ft_addr_start = i * 16;
+                if (panda_joint_types[i] == 0) {
+                    xrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
+                }
+                else if (panda_joint_types[i] == 1) {
+                    yrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
+                }
+                else if (panda_joint_types[i] == 2) {
+                    zrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
+                }
+
+                for (int r=0; r<4; r++){
+                    T_col[r] = dot4_col(&T_base[r], T_step_col);
+                }
             }
 
-            for (int r=0; r<4; r++){
-                T_col[r] = dot4_col(&T_base[r], T_step_col);
-            }
-
-            __syncthreads();
+            // __syncthreads();
             // if (tid == 0) {
             //     printf("approx i: %d, q[i]: %f, T: %f %f %f %f, %f %f %f %f, %f %f %f %f, %f %f %f %f\n", i, q[i], T_base[0], T_base[1], T_base[2], T_base[3], T_base[4], T_base[5], T_base[6], T_base[7], T_base[8], T_base[9], T_base[10], T_base[11], T_base[12], T_base[13], T_base[14], T_base[15]);
             // }
@@ -364,28 +366,30 @@ namespace ppln::collision {
         }
         T_col[col_ind] = 1;
 
-        if (col_ind == 0) {
-           sphere_pos[batch_ind * 16 * 3 + 0] = 0;
-           sphere_pos[batch_ind * 16 * 3 + 1] = 0;
-           sphere_pos[batch_ind * 16 * 3 + 2] = 0.05;
-        }
-        transformed_sphere_ind++;
+        // if (col_ind == 0) {
+        //    sphere_pos[batch_ind * 16 * 3 + 0] = 0;
+        //    sphere_pos[batch_ind * 16 * 3 + 1] = 0;
+        //    sphere_pos[batch_ind * 16 * 3 + 2] = 0.05;
+        // }
+        // transformed_sphere_ind++;
 
         // loop through each joint, accumulate transformation matrix, and update sphere positions
-        for (int i = 1; i < 8; ++i) {
-            int ft_addr_start = i * 16;
-            if (panda_joint_types[i] == 0) {
-                xrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
-            }
-            else if (panda_joint_types[i] == 1) {
-                yrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
-            }
-            else if (panda_joint_types[i] == 2) {
-                zrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
-            }
+        for (int i = 0; i < 8; ++i) {
+            if (i > 0) {
+                int ft_addr_start = i * 16;
+                if (panda_joint_types[i] == 0) {
+                    xrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
+                }
+                else if (panda_joint_types[i] == 1) {
+                    yrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
+                }
+                else if (panda_joint_types[i] == 2) {
+                    zrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
+                }
 
-            for (int r=0; r<4; r++){
-                T_col[r] = dot4_col(&T_base[r], T_step_col);
+                for (int r=0; r<4; r++){
+                    T_col[r] = dot4_col(&T_base[r], T_step_col);
+                }
             }
 
             // __syncthreads();
