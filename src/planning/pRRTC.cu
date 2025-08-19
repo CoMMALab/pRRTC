@@ -3,8 +3,9 @@
 #include "utils.cuh"
 #include "pRRTC_settings.hh"
 #include "src/collision/environment.hh"
-#include "src/robots/panda_test.cuh"
-#include "src/robots/fetch.cuh"
+#include "src/robots/panda_new.cuh"
+#include "src/robots/fetch_new.cuh"
+#include "src/robots/baxter_new.cuh"
 
 #include <curand.h>
 #include <curand_kernel.h>
@@ -332,10 +333,10 @@ namespace pRRTC {
         __shared__ float vec[dim];
         __shared__ unsigned int n_extensions;
         __shared__ bool should_skip;
-        __align__(16) __shared__ volatile float sphere_pos[7800]; // ~assuming max 120 spheres with granularity 16, each has x y z coordinates
-        // __shared__ volatile float sphere_pos_approx[1200]; // ~assuming 12 spheres with granularity 32, each has x y z coordinates
+        __align__(16) __shared__ volatile float sphere_pos[4000]; // ~assuming max 120 spheres with granularity 32, each has x y z coordinates
+        __align__(16) __shared__ volatile float sphere_pos_approx[2500]; // ~assuming 50 spheres with granularity 32, each has x y z coordinates
         __align__(16) __shared__ volatile int link_CC[640]; //assuming max granularity 32, max number of links 20
-        __align__(16) __shared__ float T[16 * 16]; // 16 robots x 4x4 transform matrix
+        __align__(16) __shared__ float T[32 * 2 * 16]; // 32 robots x 2x4x4 transform matrix
 
         int iter = 0;
 
@@ -382,7 +383,8 @@ namespace pRRTC {
                 Robot::scale_cfg((float *)config);
                 local_cc_result[0] = 0;
                 // printf("config: %f %f %f %f %f %f %f\n", config[0], config[1], config[2], config[3], config[4], config[5], config[6]);
-
+                // 14 dim config for baxter
+                // printf("config: %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n", config[0], config[1], config[2], config[3], config[4], config[5], config[6], config[7], config[8], config[9], config[10], config[11], config[12], config[13]);
                 // // print out first 3 configs for testing
                 // for (int i = 0; i < 4; i++) {
                 //     float temp_config[dim];
@@ -463,9 +465,9 @@ namespace pRRTC {
             // if (tid == 0) {
             //     printf("q: %f %f %f %f %f %f %f\n", interp_cfg[0], interp_cfg[1], interp_cfg[2], interp_cfg[3], interp_cfg[4], interp_cfg[5], interp_cfg[6]);
             // }
-            ppln::collision::fk_approx<Robot>(interp_cfg, sphere_pos, T, tid);
+            ppln::collision::fk_approx<Robot>(interp_cfg, sphere_pos_approx, T, tid);
             __syncthreads();
-            bool config_in_collision2_approx = not ppln::collision::env_collision_check_approx<Robot>(sphere_pos, link_CC, env, tid);
+            bool config_in_collision2_approx = not ppln::collision::env_collision_check_approx<Robot>(sphere_pos_approx, link_CC, env, tid);
             atomicOr((unsigned int *)&local_cc_result[0], config_in_collision2_approx ? 1u : 0u);
             
             __syncthreads();
@@ -489,7 +491,7 @@ namespace pRRTC {
             // if env check is collision free, proceed to self-collision check
             if (local_cc_result[0]==0){
                 
-                bool config_in_collision_approx = not ppln::collision::self_collision_check_approx<Robot>(sphere_pos, link_CC, tid);
+                bool config_in_collision_approx = not ppln::collision::self_collision_check_approx<Robot>(sphere_pos_approx, link_CC, tid);
                 atomicOr((unsigned int *)&local_cc_result[0], config_in_collision_approx ? 1u : 0u);
                 __syncthreads();
                 // if collision found in approx self check, proceed to detailed self check
@@ -606,9 +608,9 @@ namespace pRRTC {
                         link_CC[r]=0;
                     }
                     __syncthreads();
-                    ppln::collision::fk_approx<Robot>(interp_cfg, sphere_pos, T, tid);
+                    ppln::collision::fk_approx<Robot>(interp_cfg, sphere_pos_approx, T, tid);
                     __syncthreads();
-                    bool config_in_collision2_approx = not ppln::collision::env_collision_check_approx<Robot>(sphere_pos, link_CC, env, tid);
+                    bool config_in_collision2_approx = not ppln::collision::env_collision_check_approx<Robot>(sphere_pos_approx, link_CC, env, tid);
                     atomicOr((unsigned int *)&local_cc_result[0], config_in_collision2_approx ? 1u : 0u);
                     __syncthreads();
                     // if collision found in approx env check, proceed to detailed env check
@@ -633,7 +635,7 @@ namespace pRRTC {
                     }
                     __syncthreads();
                     if (local_cc_result[0]==0){
-                        bool config_in_collision_approx = not ppln::collision::self_collision_check_approx<Robot>(sphere_pos, link_CC, tid);
+                        bool config_in_collision_approx = not ppln::collision::self_collision_check_approx<Robot>(sphere_pos_approx, link_CC, tid);
                         atomicOr((unsigned int *)&local_cc_result[0], config_in_collision_approx ? 1u : 0u);
                         __syncthreads();
                         // if collision found in approx self check, proceed to detailed self check
@@ -900,6 +902,6 @@ namespace pRRTC {
     //template PlannerResult<typename ppln::robots::Sphere> solve<ppln::robots::Sphere>(std::array<float, 3>&, std::vector<std::array<float, 3>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
     template PlannerResult<typename ppln::robots::Panda> solve<ppln::robots::Panda>(std::array<float, 7>&, std::vector<std::array<float, 7>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
     template PlannerResult<typename ppln::robots::Fetch> solve<ppln::robots::Fetch>(std::array<float, 8>&, std::vector<std::array<float, 8>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
-    //template PlannerResult<typename ppln::robots::Baxter> solve<ppln::robots::Baxter>(std::array<float, 14>&, std::vector<std::array<float, 14>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
+    template PlannerResult<typename ppln::robots::Baxter> solve<ppln::robots::Baxter>(std::array<float, 14>&, std::vector<std::array<float, 14>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
 
 }

@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
     settings.num_new_configs = 512; //usually:512
     settings.max_iters = 100000000;
     settings.granularity = 16;
-    settings.range = 0.5;
+    settings.range = 0.25;
     settings.balance = 2;
     settings.tree_ratio = 1.0;
     settings.dynamic_domain = true;
@@ -143,7 +143,7 @@ int main(int argc, char* argv[]) {
     } else if (robot_name == "panda") {
         run_planner<robots::Panda>(data, env, settings);
     } else if (robot_name == "baxter") {
-        // run_planner<robots::Baxter>(data, env, settings);
+        run_planner<robots::Baxter>(data, env, settings);
     } else {
         std::cerr << "Unsupported robot type: " << robot_name << "\n";
         return 1;

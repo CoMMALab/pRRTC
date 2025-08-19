@@ -266,7 +266,7 @@ int main(int argc, char* argv[]) {
     std::string run_name;
     pRRTC_settings settings;
     settings.num_new_configs = 512; // usually 512
-    settings.granularity = 16;
+    settings.granularity = 32;
     settings.range = 0.5;
     settings.balance = 2;
     settings.tree_ratio = 1.0;
@@ -297,7 +297,7 @@ int main(int argc, char* argv[]) {
         run_planning<robots::Panda, vamp::robots::Panda>(problems, settings, run_name, robot_name);
     } else if (robot_name == "baxter") {
         // settings.granularity = 64;
-        // run_planning<robots::Baxter, vamp::robots::Baxter>(problems, settings, run_name, robot_name);
+        run_planning<robots::Baxter, vamp::robots::Baxter>(problems, settings, run_name, robot_name);
     } else {
         std::cerr << "Unsupported robot type: " << robot_name << "\n";
         return 1;
