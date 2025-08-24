@@ -378,7 +378,7 @@ __device__ __constant__ int baxter_joint_types[] = {
     5
 };
 
-__device__ __constant__ int baxter_self_cc_ranges[79][3] = {
+__device__ __constant__ int baxter_self_cc_ranges[80][3] = {
     { 0, 10, 38 },
     { 0, 46, 74 },
     { 1, 10, 38 },
@@ -457,7 +457,8 @@ __device__ __constant__ int baxter_self_cc_ranges[79][3] = {
     { 49, 71, 74 },
     { 50, 62, 65 },
     { 50, 71, 74 },
-    { 51, 62, 65 }
+    { 51, 62, 65 },
+    { 51, 71, 74 }
 };
 
 __device__ __constant__ int baxter_joint_parents[15] = {
@@ -516,13 +517,6 @@ __device__ __constant__ int baxter_dfs_order[15] = {
 
 __device__ __constant__ int baxter_joint_id_to_dof[15] = {
     -1,
-    7,
-    8,
-    9,
-    10,
-    11,
-    12,
-    13,
     0,
     1,
     2,
@@ -530,6 +524,13 @@ __device__ __constant__ int baxter_joint_id_to_dof[15] = {
     4,
     5,
     6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
 };
 
 
@@ -609,12 +610,12 @@ __device__ void fk<ppln::robots::Baxter>(
     }
     __syncthreads();
 
-    if (tid == 0) {
-        printf("fk: %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n", q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10], q[11], q[12], q[13]);
-        for (int i = 0; i < BAXTER_SPHERE_COUNT; i++) {
-            printf("fk sphere %d: %f, %f, %f, %f\n", i, sphere_pos[i * BATCH_SIZE * 3 + batch_ind * 3 + 0], sphere_pos[i * BATCH_SIZE * 3 + batch_ind * 3 + 1], sphere_pos[i * BATCH_SIZE * 3 + batch_ind * 3 + 2], baxter_spheres_array[i].w);
-        }
-    }
+    // if (tid == 63) {
+    //     printf("fk: %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n", q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10], q[11], q[12], q[13]);
+    //     for (int i = 0; i < BAXTER_SPHERE_COUNT; i++) {
+    //         printf("sphere_pos %d: %f, %f, %f, %f\n", i, sphere_pos[i * BATCH_SIZE * 3 + batch_ind * 3 + 0], sphere_pos[i * BATCH_SIZE * 3 + batch_ind * 3 + 1], sphere_pos[i * BATCH_SIZE * 3 + batch_ind * 3 + 2], baxter_spheres_array[i].w);
+    //     }
+    // }
 }
 
 // 4 threads per discretized motion for self-collision check
@@ -924,7 +925,7 @@ __device__ __constant__ int baxter_approx_joint_types[] = {
     5
 };
 
-__device__ __constant__ int baxter_approx_self_cc_ranges[38][3] = {
+__device__ __constant__ int baxter_approx_self_cc_ranges[39][3] = {
     { 0, 5, 16 },
     { 0, 21, 32 },
     { 1, 5, 10 },
@@ -962,7 +963,8 @@ __device__ __constant__ int baxter_approx_self_cc_ranges[38][3] = {
     { 21, 32, 32 },
     { 22, 29, 29 },
     { 22, 32, 32 },
-    { 23, 29, 29 }
+    { 23, 29, 29 },
+    { 23, 32, 32 }
 };
 
 __device__ __constant__ int baxter_approx_joint_parents[15] = {
@@ -1021,13 +1023,6 @@ __device__ __constant__ int baxter_approx_dfs_order[15] = {
 
 __device__ __constant__ int baxter_approx_joint_id_to_dof[15] = {
     -1,
-    7,
-    8,
-    9,
-    10,
-    11,
-    12,
-    13,
     0,
     1,
     2,
@@ -1035,6 +1030,13 @@ __device__ __constant__ int baxter_approx_joint_id_to_dof[15] = {
     4,
     5,
     6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
 };
 
 template <>
@@ -1136,12 +1138,12 @@ __device__ void fk_approx<ppln::robots::Baxter>(
         //     }
         // }
     }
-    if (tid == 0) {
-        printf("fk_approx: %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n", q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10], q[11], q[12], q[13]);
-        for (int i = 0; i < BAXTER_APPROX_SPHERE_COUNT; i++) {
-            printf("sphere_pos_approx %d: %f, %f, %f, %f\n", i, sphere_pos_approx[i * BATCH_SIZE * 3 + batch_ind * 3 + 0], sphere_pos_approx[i * BATCH_SIZE * 3 + batch_ind * 3 + 1], sphere_pos_approx[i * BATCH_SIZE * 3 + batch_ind * 3 + 2], baxter_approx_spheres_array[i].w);
-        }
-    }
+    // if (tid == 63) {
+    //     printf("fk_approx: %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n", q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7], q[8], q[9], q[10], q[11], q[12], q[13]);
+    //     for (int i = 0; i < BAXTER_APPROX_SPHERE_COUNT; i++) {
+    //         printf("sphere_pos_approx %d: %f, %f, %f, %f\n", i, sphere_pos_approx[i * BATCH_SIZE * 3 + batch_ind * 3 + 0], sphere_pos_approx[i * BATCH_SIZE * 3 + batch_ind * 3 + 1], sphere_pos_approx[i * BATCH_SIZE * 3 + batch_ind * 3 + 2], baxter_approx_spheres_array[i].w);
+    //     }
+    // }
     __syncthreads();
 }
 
@@ -1150,7 +1152,7 @@ template <>
 __device__ bool self_collision_check_approx<ppln::robots::Baxter>(volatile float* sphere_pos_approx, volatile int* joint_in_collision, const int tid){
     const int thread_ind = tid % 4;
     const int batch_ind = tid / 4;
-
+    bool out = true;
     for (int i = thread_ind; i < BAXTER_APPROX_SELF_CC_RANGE_COUNT; i+=4) {
         int sphere_1_ind = baxter_approx_self_cc_ranges[i][0];
         float sphere_1[3] = {
@@ -1169,11 +1171,11 @@ __device__ bool self_collision_check_approx<ppln::robots::Baxter>(volatile float
                 sphere_2[0], sphere_2[1], sphere_2[2], baxter_approx_spheres_array[j].w
             )){
                 atomicAdd((int*)&joint_in_collision[20*batch_ind + baxter_approx_sphere_to_joint[sphere_1_ind]], 1);
-                return false;
+                out = false;
             }
         } 
     }
-    return true;
+    return out;
 }
 
 // 4 threads per discretized motion for env collision check
@@ -1213,6 +1215,7 @@ __device__ bool env_collision_check_approx<ppln::robots::Baxter>(volatile float*
 
     const int thread_ind = tid % 4;
     const int batch_ind = tid / 4;
+    bool out = true;
 
     for (int i = thread_ind; i < BAXTER_APPROX_SPHERE_COUNT; i += 4){
         // sphere i, robot batch_ind (32 robots)
@@ -1226,10 +1229,10 @@ __device__ bool env_collision_check_approx<ppln::robots::Baxter>(volatile float*
             )
         ) {
             atomicAdd((int*)&joint_in_collision[20*batch_ind + baxter_approx_sphere_to_joint[i]],1);
-            return false;
+            out = false;
         } 
     }
-    return true;
+    return out;
 }
 
 }

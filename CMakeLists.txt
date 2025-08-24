@@ -141,3 +141,27 @@ target_link_libraries(single_mbm
 target_compile_options(single_mbm PRIVATE
     -Wno-c++11-narrowing
 )
+
+### validate_configs
+add_executable(validate_configs
+    scripts/validate_configs.cpp
+)
+
+target_include_directories(validate_configs
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/extern/vamp/src/impl/vamp
+    ${CMAKE_CURRENT_SOURCE_DIR}/extern/vamp/src/impl
+    ${CMAKE_CURRENT_SOURCE_DIR}/build/_deps/nigh-src/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/extern/pdqsort
+)
+
+target_link_libraries(validate_configs
+    PRIVATE
+    nlohmann_json::nlohmann_json
+    Eigen3::Eigen
+)
+
+target_compile_options(validate_configs PRIVATE
+    -Wno-c++11-narrowing
+)

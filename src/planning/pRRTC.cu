@@ -5,7 +5,7 @@
 #include "src/collision/environment.hh"
 #include "src/robots/panda_new.cuh"
 #include "src/robots/fetch_new.cuh"
-#include "src/robots/baxter_new.cuh"
+#include "src/robots/baxter.cuh"
 
 #include <curand.h>
 #include <curand_kernel.h>
@@ -300,6 +300,15 @@ namespace pRRTC {
             printf("CUDA error: %s\n", cudaGetErrorString(error));
         }
     }
+
+    __device__ __forceinline__ void reset_to_unwritten_state(volatile float *buffer, int size, int tid) {
+        if (tid == 0) {
+            for (int i = 0; i < size; i++) {
+                buffer[i] = UNWRITTEN_VAL;
+            }
+        }
+        __syncthreads();
+    }
     
     template <typename Robot>
     __global__ void
@@ -465,6 +474,7 @@ namespace pRRTC {
             // if (tid == 0) {
             //     printf("q: %f %f %f %f %f %f %f\n", interp_cfg[0], interp_cfg[1], interp_cfg[2], interp_cfg[3], interp_cfg[4], interp_cfg[5], interp_cfg[6]);
             // }
+            
             ppln::collision::fk_approx<Robot>(interp_cfg, sphere_pos_approx, T, tid);
             __syncthreads();
             bool config_in_collision2_approx = not ppln::collision::env_collision_check_approx<Robot>(sphere_pos_approx, link_CC, env, tid);
@@ -476,10 +486,14 @@ namespace pRRTC {
                 // if (tid == 0) printf("approx env collision\n");
                 if (tid==0) local_cc_result[0]=0;
                 __syncthreads();
+                //reset_to_unwritten_state(sphere_pos, 4000, tid);
                 ppln::collision::fk<Robot>(interp_cfg, sphere_pos, T, tid);
                 detailed_FK=1;
                 __syncthreads();
                 bool config_in_collision2 = not ppln::collision::env_collision_check<Robot>(sphere_pos, link_CC, env, tid);
+                // if (tid == 63) {
+                //     printf("config_in_collision2: %d\n", config_in_collision2);
+                // }
                 atomicOr((unsigned int *)&local_cc_result[0], config_in_collision2 ? 1u : 0u);
                 __syncthreads();
             }
@@ -500,6 +514,7 @@ namespace pRRTC {
                     if (tid==0) local_cc_result[0]=0;
                     __syncthreads();
                     if (detailed_FK==0){
+                        //reset_to_unwritten_state(sphere_pos, 4000, tid);
                         ppln::collision::fk<Robot>(interp_cfg, sphere_pos, T, tid);
                         detailed_FK=1;
                         __syncthreads();
@@ -535,6 +550,12 @@ namespace pRRTC {
                             desired = __float_as_int(new_radius);
                         } while (atomicCAS((int *)radius_ptr, expected, desired) != expected);
                     }
+                    // float last_interp_cfg[dim];
+                    // for (int i = 0; i < dim; i++) {
+                    //     last_interp_cfg[i] = nearest_node[i] + (32 * delta[i]);
+                    // }
+                    // printf("last_interp_cfg: %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n", last_interp_cfg[0], last_interp_cfg[1], last_interp_cfg[2], last_interp_cfg[3], last_interp_cfg[4], last_interp_cfg[5], last_interp_cfg[6], last_interp_cfg[7], last_interp_cfg[8], last_interp_cfg[9], last_interp_cfg[10], last_interp_cfg[11], last_interp_cfg[12], last_interp_cfg[13]);
+                    // printf("config added: %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n", config[0], config[1], config[2], config[3], config[4], config[5], config[6], config[7], config[8], config[9], config[10], config[11], config[12], config[13]);
                 }
                 __syncthreads();
 
@@ -618,6 +639,7 @@ namespace pRRTC {
                         // if (tid == 0) printf("approx env collision in extension\n");
                         if (tid==0) local_cc_result[0]=0;
                         __syncthreads();
+                        //reset_to_unwritten_state(sphere_pos, 4000, tid);
                         ppln::collision::fk<Robot>(interp_cfg, sphere_pos, T, tid);
                         detailed_FK=1;
                         __syncthreads();
@@ -644,6 +666,7 @@ namespace pRRTC {
                             if (tid==0) local_cc_result[0]=0;
                             __syncthreads();
                             if (detailed_FK==0){
+                                //reset_to_unwritten_state(sphere_pos, 4000, tid);
                                 ppln::collision::fk<Robot>(interp_cfg, sphere_pos, T, tid);
                                 detailed_FK=1;
                                 __syncthreads();
@@ -664,6 +687,7 @@ namespace pRRTC {
                         radii[t_tree_id][index] = FLT_MAX;
                         extension_parent_idx = index;
                         local_cc_result[0] = 0;
+                        // printf("config added (extension): %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f, %f\n", config[0], config[1], config[2], config[3], config[4], config[5], config[6], config[7], config[8], config[9], config[10], config[11], config[12], config[13]);
                     }
                     __syncthreads();
                     if (tid < dim) {

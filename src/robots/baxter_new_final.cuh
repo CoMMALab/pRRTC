@@ -650,9 +650,6 @@ __device__ bool env_collision_check<ppln::robots::Baxter>(volatile float* sphere
 
     for (int i = thread_ind; i < BAXTER_SPHERE_COUNT; i += 4){
         // sphere i, robot batch_ind (16 robots)
-        if (blockIdx.x == 0 && batch_ind == 0 && thread_ind == 2) {
-            printf("checking sphere %d: %f, %f, %f, %f\n", i, sphere_pos[i * BATCH_SIZE * 3 + batch_ind * 3 + 0], sphere_pos[i * BATCH_SIZE * 3 + batch_ind * 3 + 1], sphere_pos[i * BATCH_SIZE * 3 + batch_ind * 3 + 2], baxter_spheres_array[i].w);
-        }
         if (joint_in_collision[20*batch_ind + baxter_sphere_to_joint[i]] > 0 && 
             sphere_environment_in_collision(
                 env,
@@ -1059,7 +1056,7 @@ __device__ void fk_approx<ppln::robots::Baxter>(
         }
         T_col_i[col_ind] = 1.0f;
     }
-    __syncthreads();
+    __syncwarp();
 
     int joint_to_sphere_ind = 0;
 
