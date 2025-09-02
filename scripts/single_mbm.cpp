@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
     settings.num_new_configs = 512; //usually:512
     settings.max_iters = 100000000;
     settings.granularity = 16;
-    settings.range = 0.25;
+    settings.range = 0.5;
     settings.balance = 2;
     settings.tree_ratio = 1.0;
     settings.dynamic_domain = true;

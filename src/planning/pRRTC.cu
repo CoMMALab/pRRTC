@@ -3,8 +3,8 @@
 #include "utils.cuh"
 #include "pRRTC_settings.hh"
 #include "src/collision/environment.hh"
-#include "src/robots/panda_new.cuh"
-#include "src/robots/fetch_new.cuh"
+#include "src/robots/panda.cuh"
+#include "src/robots/fetch.cuh"
 #include "src/robots/baxter.cuh"
 
 #include <curand.h>
@@ -342,10 +342,10 @@ namespace pRRTC {
         __shared__ float vec[dim];
         __shared__ unsigned int n_extensions;
         __shared__ bool should_skip;
-        __align__(16) __shared__ volatile float sphere_pos[4000]; // ~assuming max 120 spheres with granularity 32, each has x y z coordinates
+        __align__(16) __shared__ volatile float sphere_pos[6000]; // ~assuming max 120 spheres with granularity 32, each has x y z coordinates
         __align__(16) __shared__ volatile float sphere_pos_approx[2500]; // ~assuming 50 spheres with granularity 32, each has x y z coordinates
         __align__(16) __shared__ volatile int link_CC[640]; //assuming max granularity 32, max number of links 20
-        __align__(16) __shared__ float T[32 * 2 * 16]; // 32 robots x 2x4x4 transform matrix
+        __align__(16) __shared__ float T[16 * 1 * 16]; // 32 robots x 2x4x4 transform matrix
 
         int iter = 0;
 
@@ -447,7 +447,6 @@ namespace pRRTC {
                 nearest_node = &t_nodes[sindex[0] * dim];
 
                 should_skip = (d_settings.dynamic_domain && radii[t_tree_id][sindex[0]] < sdata[0]);
-
             }
             __syncthreads();
 

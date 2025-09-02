@@ -4,9 +4,9 @@ namespace ppln::collision {
 
 
 
-    #define FETCH_SPHERE_COUNT 111
-    #define FETCH_JOINT_COUNT 9
-    #define FETCH_SELF_CC_RANGE_COUNT 113
+    #define FETCH_APPROX_SPHERE_COUNT 15
+    #define FETCH_APPROX_JOINT_COUNT 9
+    #define FETCH_APPROX_SELF_CC_RANGE_COUNT 15
     #define FIXED -1
     #define X_PRISM 0
     #define Y_PRISM 1
@@ -14,6 +14,355 @@ namespace ppln::collision {
     #define X_ROT 3
     #define Y_ROT 4
     #define Z_ROT 5
+    #define BATCH_SIZE 16
+    
+    __device__ __constant__ float4 fetch_approx_spheres_array[15] = {
+        { -0.02f, 0.0f, 0.188f, 0.34f },
+        { -0.186875f, 0.0f, 0.587425f, 0.277f },
+        { -0.1f, 0.0f, 0.3f, 0.308f },
+        { 0.100125f, 0.0f, 0.662001f, 0.197f },
+        { 0.06f, -0.015f, 0.03f, 0.124f },
+        { 0.063f, 0.019f, 0.0f, 0.134f },
+        { 0.056f, -0.02f, 0.0f, 0.134f },
+        { 0.071f, 0.021f, 0.0f, 0.127f },
+        { 0.064f, -0.026f, 0.0f, 0.124f },
+        { 0.029f, 0.017f, 0.0f, 0.09f },
+        { -0.015f, 0.0f, 0.0f, 0.07f },
+        { 0.08145f, 0.0f, 0.0f, 0.075f },
+        { 0.16645f, -0.056425f, 0.0f, 0.03f },
+        { 0.16645f, 0.056425f, 0.0f, 0.03f },
+        { 0.1f, 0.0f, 0.24f, 0.07f }
+    };
+    
+    __device__ __constant__ float fetch_approx_fixed_transforms[] = {
+        // joint 0
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+        
+        // joint 1
+        1.0, 0.0, 0.0, -0.086875,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.37743,
+        0.0, 0.0, 0.0, 1.0,
+        
+        // joint 2
+        1.0, 0.0, 0.0, 0.119525,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.34858,
+        0.0, 0.0, 0.0, 1.0,
+        
+        // joint 3
+        1.0, 0.0, 0.0, 0.117,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.06,
+        0.0, 0.0, 0.0, 1.0,
+        
+        // joint 4
+        1.0, 0.0, 0.0, 0.219,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+        
+        // joint 5
+        1.0, 0.0, 0.0, 0.133,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+        
+        // joint 6
+        1.0, 0.0, 0.0, 0.197,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+        
+        // joint 7
+        1.0, 0.0, 0.0, 0.1245,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+        
+        // joint 8
+        1.0, 0.0, 0.0, 0.1385,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0,
+        
+        
+    };
+    
+    __device__ __constant__ int fetch_approx_sphere_to_joint[15] = {
+        0,
+        0,
+        1,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        8,
+        8,
+        8,
+        1
+    };
+    
+    __device__ __constant__ int fetch_approx_flattened_joint_to_spheres[24] = {
+        0,
+        1,
+        -1,
+        2,
+        3,
+        14,
+        -1,
+        4,
+        -1,
+        5,
+        -1,
+        6,
+        -1,
+        7,
+        -1,
+        8,
+        -1,
+        9,
+        -1,
+        10,
+        11,
+        12,
+        13,
+        -1
+    };
+    
+    __device__ __constant__ int fetch_approx_joint_types[] = {
+        3,
+        2,
+        5,
+        4,
+        3,
+        4,
+        3,
+        4,
+        3
+    };
+    
+    __device__ __constant__ int fetch_approx_self_cc_ranges[15][3] = {
+        { 0, 7, 13 },
+        { 1, 6, 13 },
+        { 2, 6, 13 },
+        { 3, 6, 13 },
+        { 4, 6, 6 },
+        { 4, 10, 13 },
+        { 5, 11, 14 },
+        { 6, 14, 14 },
+        { 7, 14, 14 },
+        { 8, 14, 14 },
+        { 9, 14, 14 },
+        { 10, 14, 14 },
+        { 11, 14, 14 },
+        { 12, 14, 14 },
+        { 13, 14, 14 }
+    };
+    
+    __device__ __constant__ int fetch_approx_joint_parents[9] = {
+        0,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+    };
+    
+    __device__ __constant__ int fetch_approx_T_memory_idx[9] = {
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+    };
+    
+    __device__ __constant__ int fetch_approx_dfs_order[9] = {
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+    };
+    
+    __device__ __constant__ int fetch_approx_joint_id_to_dof[9] = {
+        -1,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+    };
+    
+    template <>
+    __device__ void fk_approx<ppln::robots::Fetch>(
+        const float* q,
+        volatile float* sphere_pos_approx, // 15 spheres x 16 robots x 3 coordinates (each column is a robot)
+        float *T, // 16 robots x 1 x 4x4 transform matrix , column major
+        const int tid
+    )
+    {
+        // every 4 threads are responsible for one column of the transform matrix T
+        // make_transform will calculate the necessary column of T_step needed for the thread
+        const int col_ind = tid % 4;
+        const int batch_ind = tid / 4;
+    
+        int T_offset = batch_ind * 1 * 16;
+        float T_step_col[4]; // 4x1 column of the joint transform matrix for this thread
+        float *T_base = T + T_offset; // 4x4 transform matrix for the batch
+        
+        #pragma unroll
+        for (int i = 0; i < 1; ++i) {
+            float *T_col_i = T_base + i * 16 + col_ind * 4;
+            for (int r=0; r<4; r++) {
+                T_col_i[r] = 0.0f;
+            }
+            T_col_i[col_ind] = 1.0f;
+        }
+        __syncthreads();
+    
+        int joint_to_sphere_ind = 0;
+    
+        for (int j = 0; j < FETCH_APPROX_JOINT_COUNT; ++j) {
+            int i = fetch_approx_dfs_order[j];
+            float T_col_tmp[4];
+            int parent_idx = fetch_approx_joint_parents[i];
+            int T_memory_idx_parent = fetch_approx_T_memory_idx[parent_idx];
+            int T_memory_idx = fetch_approx_T_memory_idx[i];
+            int q_idx = fetch_approx_joint_id_to_dof[i];
+            if (j > 0) {
+                int ft_addr_start = i * 16;
+                int joint_type = fetch_approx_joint_types[i];
+    
+                if (joint_type <= Z_PRISM) {
+                    prism_fn(&fetch_approx_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col, joint_type);
+                }
+                else if (joint_type == X_ROT) {
+                    xrot_fn(&fetch_approx_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col);
+                }
+                else if (joint_type == Y_ROT) {
+                    yrot_fn(&fetch_approx_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col);
+                }
+                else if (joint_type == Z_ROT) {
+                    zrot_fn(&fetch_approx_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col);
+                }
+                
+                for (int r=0; r<4; r++){
+                    T_col_tmp[r] = dot4_col(&T_base[T_memory_idx_parent*16 + r], T_step_col);
+                }
+                for (int r=0; r<4; r++){
+                    T_base[T_memory_idx*16 + col_ind*4 + r] = T_col_tmp[r];
+                }
+            }
+            __syncwarp();
+            while (fetch_approx_flattened_joint_to_spheres[joint_to_sphere_ind] != -1) {
+                int sphere_ind = fetch_approx_flattened_joint_to_spheres[joint_to_sphere_ind];
+                if (col_ind < 3) {
+                    // sphere sphere_ind, robot batch_ind (BATCH_SIZE robots), coord col_ind
+                    sphere_pos_approx[sphere_ind * BATCH_SIZE * 3 + batch_ind * 3 + col_ind] = 
+                        T_base[T_memory_idx*16 + col_ind] * fetch_approx_spheres_array[sphere_ind].x +
+                        T_base[T_memory_idx*16 + col_ind + M] * fetch_approx_spheres_array[sphere_ind].y +
+                        T_base[T_memory_idx*16 + col_ind + M*2] * fetch_approx_spheres_array[sphere_ind].z +
+                        T_base[T_memory_idx*16 + col_ind + M*3];
+                }
+                joint_to_sphere_ind++;
+            }
+            joint_to_sphere_ind++;
+            __syncthreads();
+        }
+    }
+    
+    // 4 threads per discretized motion for self-collision check
+    template <>
+    __device__ bool self_collision_check_approx<ppln::robots::Fetch>(volatile float* sphere_pos_approx, volatile int* joint_in_collision, const int tid){
+        const int thread_ind = tid % 4;
+        const int batch_ind = tid / 4;
+        bool out = true;
+        for (int i = thread_ind; i < FETCH_APPROX_SELF_CC_RANGE_COUNT; i+=4) {
+            int sphere_1_ind = fetch_approx_self_cc_ranges[i][0];
+            float sphere_1[3] = {
+                sphere_pos_approx[sphere_1_ind * BATCH_SIZE * 3 + batch_ind * 3 + 0],
+                sphere_pos_approx[sphere_1_ind * BATCH_SIZE * 3 + batch_ind * 3 + 1],
+                sphere_pos_approx[sphere_1_ind * BATCH_SIZE * 3 + batch_ind * 3 + 2]
+            };
+            for (int j = fetch_approx_self_cc_ranges[i][1]; j <= fetch_approx_self_cc_ranges[i][2]; j++) {
+                float sphere_2[3] = {
+                    sphere_pos_approx[j * BATCH_SIZE * 3 + batch_ind * 3 + 0],
+                    sphere_pos_approx[j * BATCH_SIZE * 3 + batch_ind * 3 + 1],
+                    sphere_pos_approx[j * BATCH_SIZE * 3 + batch_ind * 3 + 2]
+                };
+                if (sphere_sphere_self_collision(
+                    sphere_1[0], sphere_1[1], sphere_1[2], fetch_approx_spheres_array[sphere_1_ind].w,
+                    sphere_2[0], sphere_2[1], sphere_2[2], fetch_approx_spheres_array[j].w
+                )){
+                    atomicAdd((int*)&joint_in_collision[20*batch_ind + fetch_approx_sphere_to_joint[sphere_1_ind]], 1);
+                    out = false;
+                }
+            } 
+        }
+        return out;
+    }
+    
+    // 4 threads per discretized motion for env collision check
+    template <>
+    __device__ bool env_collision_check_approx<ppln::robots::Fetch>(volatile float* sphere_pos_approx, volatile int* joint_in_collision, ppln::collision::Environment<float> *env, const int tid){
+        const int thread_ind = tid % 4;
+        const int batch_ind = tid / 4;
+        bool out = true;
+    
+        for (int i = thread_ind; i < FETCH_APPROX_SPHERE_COUNT; i += 4){
+            // sphere i, robot batch_ind (32 robots)
+            if ( 
+                sphere_environment_in_collision(
+                    env,
+                    sphere_pos_approx[i * BATCH_SIZE * 3 + batch_ind * 3 + 0],
+                    sphere_pos_approx[i * BATCH_SIZE * 3 + batch_ind * 3 + 1],
+                    sphere_pos_approx[i * BATCH_SIZE * 3 + batch_ind * 3 + 2],
+                    fetch_approx_spheres_array[i].w
+                )
+            ) {
+                atomicAdd((int*)&joint_in_collision[20*batch_ind + fetch_approx_sphere_to_joint[i]],1);
+                out = false;
+            } 
+        }
+        return out;
+    }
+    
+    
+    
+    
+    #define FETCH_SPHERE_COUNT 111
+    #define FETCH_JOINT_COUNT 9
+    #define FETCH_SELF_CC_RANGE_COUNT 114
+    #define FIXED -1
+    #define X_PRISM 0
+    #define Y_PRISM 1
+    #define Z_PRISM 2
+    #define X_ROT 3
+    #define Y_ROT 4
+    #define Z_ROT 5
+    #define BATCH_SIZE 16
     
     __device__ __constant__ float4 fetch_spheres_array[111] = {
         { -0.12f, 0.0f, 0.182f, 0.24f },
@@ -187,7 +536,7 @@ namespace ppln::collision {
         
     };
     
-    __device__ __constant__ int fetch_sphere_to_joint[] = {
+    __device__ __constant__ int fetch_sphere_to_joint[111] = {
         0,
         0,
         0,
@@ -301,6 +650,129 @@ namespace ppln::collision {
         1
     };
     
+    __device__ __constant__ int fetch_flattened_joint_to_spheres[120] = {
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        -1,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49,
+        50,
+        51,
+        52,
+        53,
+        110,
+        -1,
+        54,
+        55,
+        56,
+        57,
+        -1,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        -1,
+        65,
+        66,
+        67,
+        68,
+        69,
+        70,
+        71,
+        72,
+        -1,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        -1,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        -1,
+        86,
+        87,
+        88,
+        89,
+        90,
+        91,
+        -1,
+        92,
+        93,
+        94,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102,
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109,
+        -1
+    };
+    
     __device__ __constant__ int fetch_joint_types[] = {
         3,
         2,
@@ -313,7 +785,7 @@ namespace ppln::collision {
         3
     };
     
-    __device__ __constant__ int fetch_self_cc_ranges[113][3] = {
+    __device__ __constant__ int fetch_self_cc_ranges[114][3] = {
         { 0, 73, 109 },
         { 1, 73, 109 },
         { 2, 73, 109 },
@@ -426,14 +898,63 @@ namespace ppln::collision {
         { 105, 110, 110 },
         { 106, 110, 110 },
         { 107, 110, 110 },
-        { 108, 110, 110 }
+        { 108, 110, 110 },
+        { 109, 110, 110 }
+    };
+    
+    __device__ __constant__ int fetch_joint_parents[9] = {
+        0,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
+    };
+    
+    __device__ __constant__ int fetch_T_memory_idx[9] = {
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+    };
+    
+    __device__ __constant__ int fetch_dfs_order[9] = {
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+    };
+    
+    __device__ __constant__ int fetch_joint_id_to_dof[9] = {
+        -1,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7
     };
     
     template <>
     __device__ void fk<ppln::robots::Fetch>(
         const float* q,
-        volatile float* sphere_pos, // 111 spheres x 16 robots x 3 coordinates
-        float *T, // 16 robots x 4x4 transform matrix
+        volatile float* sphere_pos, // 111 spheres x 16 robots x 3 coordinates (each column is a robot)
+        float *T, // 16 robots x 1 x 4x4 transform matrix , column major
         const int tid
     )
     {
@@ -441,52 +962,70 @@ namespace ppln::collision {
         // make_transform will calculate the necessary column of T_step needed for the thread
         const int col_ind = tid % 4;
         const int batch_ind = tid / 4;
-        int transformed_sphere_ind = 0;
     
-        int T_offset = batch_ind * 16;
+        int T_offset = batch_ind * 1 * 16;
         float T_step_col[4]; // 4x1 column of the joint transform matrix for this thread
         float *T_base = T + T_offset; // 4x4 transform matrix for the batch
-        float *T_col = T_base + col_ind*4; // 1x4 column (column major) of the transform matrix for this thread
-    
-        for (int r=0; r<4; r++){
-            T_col[r] = 0;
+        
+        #pragma unroll
+        for (int i = 0; i < 1; ++i) {
+            float *T_col_i = T_base + i * 16 + col_ind * 4;
+            for (int r=0; r<4; r++) {
+                T_col_i[r] = 0.0f;
+            }
+            T_col_i[col_ind] = 1.0f;
         }
-        T_col[col_ind] = 1;
+        __syncthreads();
     
-        // loop through each joint, accumulate transformation matrix, and update sphere positions
-        for (int i = 0; i < FETCH_JOINT_COUNT; ++i) {
-            if (i > 0) {
+        int joint_to_sphere_ind = 0;
+    
+        for (int j = 0; j < FETCH_JOINT_COUNT; ++j) {
+            int i = fetch_dfs_order[j];
+            float T_col_tmp[4];
+            int parent_idx = fetch_joint_parents[i];
+            int T_memory_idx_parent = fetch_T_memory_idx[parent_idx];
+            int T_memory_idx = fetch_T_memory_idx[i];
+            int q_idx = fetch_joint_id_to_dof[i];
+            if (j > 0) {
                 int ft_addr_start = i * 16;
                 int joint_type = fetch_joint_types[i];
+    
                 if (joint_type <= Z_PRISM) {
-                    prism_fn(&fetch_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col, joint_type);
+                    prism_fn(&fetch_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col, joint_type);
                 }
                 else if (joint_type == X_ROT) {
-                    xrot_fn(&fetch_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
+                    xrot_fn(&fetch_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col);
                 }
-                else if (joint_type == Y_ROT) { 
-                    yrot_fn(&fetch_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
+                else if (joint_type == Y_ROT) {
+                    yrot_fn(&fetch_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col);
                 }
                 else if (joint_type == Z_ROT) {
-                    zrot_fn(&fetch_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
+                    zrot_fn(&fetch_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col);
                 }
-    
+                
                 for (int r=0; r<4; r++){
-                    T_col[r] = dot4_col(&T_base[r], T_step_col);
+                    T_col_tmp[r] = dot4_col(&T_base[T_memory_idx_parent*16 + r], T_step_col);
+                }
+                for (int r=0; r<4; r++){
+                    T_base[T_memory_idx*16 + col_ind*4 + r] = T_col_tmp[r];
                 }
             }
-            
-            while (fetch_sphere_to_joint[transformed_sphere_ind]==i) {
+            __syncwarp();
+            while (fetch_flattened_joint_to_spheres[joint_to_sphere_ind] != -1) {
+                int sphere_ind = fetch_flattened_joint_to_spheres[joint_to_sphere_ind];
                 if (col_ind < 3) {
-                    // sphere transformed_sphere_ind, robot batch_ind (16 robots), coord col_ind
-                    sphere_pos[transformed_sphere_ind * 16 * 3 + batch_ind * 3 + col_ind] = 
-                        T_base[col_ind] * fetch_spheres_array[transformed_sphere_ind].x +
-                        T_base[col_ind + M] * fetch_spheres_array[transformed_sphere_ind].y +
-                        T_base[col_ind + M*2] * fetch_spheres_array[transformed_sphere_ind].z +
-                        T_base[col_ind + M*3];
+                    // sphere sphere_ind, robot batch_ind (BATCH_SIZE robots), coord col_ind
+                    // printf("index: %d\n", sphere_ind * BATCH_SIZE * 3 + batch_ind * 3 + col_ind);
+                    sphere_pos[sphere_ind * BATCH_SIZE * 3 + batch_ind * 3 + col_ind] = 
+                        T_base[T_memory_idx*16 + col_ind] * fetch_spheres_array[sphere_ind].x +
+                        T_base[T_memory_idx*16 + col_ind + M] * fetch_spheres_array[sphere_ind].y +
+                        T_base[T_memory_idx*16 + col_ind + M*2] * fetch_spheres_array[sphere_ind].z +
+                        T_base[T_memory_idx*16 + col_ind + M*3];
                 }
-                transformed_sphere_ind++;
+                joint_to_sphere_ind++;
             }
+            joint_to_sphere_ind++;
+            __syncthreads();
         }
     }
     
@@ -500,15 +1039,15 @@ namespace ppln::collision {
             int sphere_1_ind = fetch_self_cc_ranges[i][0];
             if (joint_in_collision[20*batch_ind + fetch_sphere_to_joint[sphere_1_ind]] == 0) continue;
             float sphere_1[3] = {
-                sphere_pos[sphere_1_ind * 16 * 3 + batch_ind * 3 + 0],
-                sphere_pos[sphere_1_ind * 16 * 3 + batch_ind * 3 + 1],
-                sphere_pos[sphere_1_ind * 16 * 3 + batch_ind * 3 + 2]
+                sphere_pos[sphere_1_ind * BATCH_SIZE * 3 + batch_ind * 3 + 0],
+                sphere_pos[sphere_1_ind * BATCH_SIZE * 3 + batch_ind * 3 + 1],
+                sphere_pos[sphere_1_ind * BATCH_SIZE * 3 + batch_ind * 3 + 2]
             };
             for (int j = fetch_self_cc_ranges[i][1]; j <= fetch_self_cc_ranges[i][2]; j++) {
                 float sphere_2[3] = {
-                    sphere_pos[j * 16 * 3 + batch_ind * 3 + 0],
-                    sphere_pos[j * 16 * 3 + batch_ind * 3 + 1],
-                    sphere_pos[j * 16 * 3 + batch_ind * 3 + 2]
+                    sphere_pos[j * BATCH_SIZE * 3 + batch_ind * 3 + 0],
+                    sphere_pos[j * BATCH_SIZE * 3 + batch_ind * 3 + 1],
+                    sphere_pos[j * BATCH_SIZE * 3 + batch_ind * 3 + 2]
                 };
                 if (sphere_sphere_self_collision(
                     sphere_1[0], sphere_1[1], sphere_1[2], fetch_spheres_array[sphere_1_ind].w,
@@ -533,9 +1072,9 @@ namespace ppln::collision {
             if (joint_in_collision[20*batch_ind + fetch_sphere_to_joint[i]] > 0 && 
                 sphere_environment_in_collision(
                     env,
-                    sphere_pos[i * 16 * 3 + batch_ind * 3 + 0],
-                    sphere_pos[i * 16 * 3 + batch_ind * 3 + 1],
-                    sphere_pos[i * 16 * 3 + batch_ind * 3 + 2],
+                    sphere_pos[i * BATCH_SIZE * 3 + batch_ind * 3 + 0],
+                    sphere_pos[i * BATCH_SIZE * 3 + batch_ind * 3 + 1],
+                    sphere_pos[i * BATCH_SIZE * 3 + batch_ind * 3 + 2],
                     fetch_spheres_array[i].w
                 )
             ) {
@@ -544,273 +1083,5 @@ namespace ppln::collision {
         }
         return true;
     }
-
-
-
-
-
-
-
-#define FETCH_APPROX_SPHERE_COUNT 15
-#define FETCH_APPROX_JOINT_COUNT 9
-#define FETCH_APPROX_SELF_CC_RANGE_COUNT 14
-#define FIXED -1
-#define X_PRISM 0
-#define Y_PRISM 1
-#define Z_PRISM 2
-#define X_ROT 3
-#define Y_ROT 4
-#define Z_ROT 5
-
-__device__ __constant__ float4 fetch_approx_spheres_array[15] = {
-    { -0.02f, 0.0f, 0.188f, 0.34f },
-    { -0.186875f, 0.0f, 0.587425f, 0.277f },
-    { -0.1f, 0.0f, 0.3f, 0.308f },
-    { 0.100125f, 0.0f, 0.662001f, 0.197f },
-    { 0.06f, -0.015f, 0.03f, 0.124f },
-    { 0.063f, 0.019f, 0.0f, 0.134f },
-    { 0.056f, -0.02f, 0.0f, 0.134f },
-    { 0.071f, 0.021f, 0.0f, 0.127f },
-    { 0.064f, -0.026f, 0.0f, 0.124f },
-    { 0.029f, 0.017f, 0.0f, 0.09f },
-    { -0.015f, 0.0f, 0.0f, 0.07f },
-    { 0.08145f, 0.0f, 0.0f, 0.075f },
-    { 0.16645f, -0.056425f, 0.0f, 0.03f },
-    { 0.16645f, 0.056425f, 0.0f, 0.03f },
-    { 0.1f, 0.0f, 0.24f, 0.07f }
-};
-
-__device__ __constant__ float fetch_approx_fixed_transforms[] = {
-    // joint 0
-    1.0, 0.0, 0.0, 0.0,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 1.0, 0.0,
-    0.0, 0.0, 0.0, 1.0,
-    
-    // joint 1
-    1.0, 0.0, 0.0, -0.086875,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 1.0, 0.37743,
-    0.0, 0.0, 0.0, 1.0,
-    
-    // joint 2
-    1.0, 0.0, 0.0, 0.119525,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 1.0, 0.34858,
-    0.0, 0.0, 0.0, 1.0,
-    
-    // joint 3
-    1.0, 0.0, 0.0, 0.117,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 1.0, 0.06,
-    0.0, 0.0, 0.0, 1.0,
-    
-    // joint 4
-    1.0, 0.0, 0.0, 0.219,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 1.0, 0.0,
-    0.0, 0.0, 0.0, 1.0,
-    
-    // joint 5
-    1.0, 0.0, 0.0, 0.133,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 1.0, 0.0,
-    0.0, 0.0, 0.0, 1.0,
-    
-    // joint 6
-    1.0, 0.0, 0.0, 0.197,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 1.0, 0.0,
-    0.0, 0.0, 0.0, 1.0,
-    
-    // joint 7
-    1.0, 0.0, 0.0, 0.1245,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 1.0, 0.0,
-    0.0, 0.0, 0.0, 1.0,
-    
-    // joint 8
-    1.0, 0.0, 0.0, 0.1385,
-    0.0, 1.0, 0.0, 0.0,
-    0.0, 0.0, 1.0, 0.0,
-    0.0, 0.0, 0.0, 1.0,
-    
-    
-};
-
-__device__ __constant__ int fetch_approx_sphere_to_joint[] = {
-    0,
-    0,
-    1,
-    1,
-    2,
-    3,
-    4,
-    5,
-    6,
-    7,
-    8,
-    8,
-    8,
-    8,
-    1
-};
-
-__device__ __constant__ int fetch_approx_joint_types[] = {
-    3,
-    2,
-    5,
-    4,
-    3,
-    4,
-    3,
-    4,
-    3
-};
-
-__device__ __constant__ int fetch_approx_self_cc_ranges[14][3] = {
-    { 0, 7, 13 },
-    { 1, 6, 13 },
-    { 2, 6, 13 },
-    { 3, 6, 13 },
-    { 4, 6, 6 },
-    { 4, 10, 13 },
-    { 5, 11, 14 },
-    { 6, 14, 14 },
-    { 7, 14, 14 },
-    { 8, 14, 14 },
-    { 9, 14, 14 },
-    { 10, 14, 14 },
-    { 11, 14, 14 },
-    { 12, 14, 14 }
-};
-
-template <>
-__device__ void fk_approx<ppln::robots::Fetch>(
-    const float* q,
-    volatile float* sphere_pos_approx, // 15 spheres x 16 robots x 3 coordinates (each column is a robot)
-    float *T, // 16 robots x 4x4 transform matrix , column major
-    const int tid
-)
-{
-    // every 4 threads are responsible for one column of the transform matrix T
-    // make_transform will calculate the necessary column of T_step needed for the thread
-    const int col_ind = tid % 4;
-    const int batch_ind = tid / 4;
-    int transformed_sphere_ind = 0;
-
-    int T_offset = batch_ind * 16;
-    float T_step_col[4]; // 4x1 column of the joint transform matrix for this thread
-    float *T_base = T + T_offset; // 4x4 transform matrix for the batch
-    float *T_col = T_base + col_ind*4; // 1x4 column (column major) of the transform matrix for this thread
-
-    for (int r=0; r<4; r++){
-        T_col[r] = 0;
     }
-    T_col[col_ind] = 1;
-
-    // loop through each joint, accumulate transformation matrix, and update sphere positions
-    for (int i = 0; i < FETCH_APPROX_JOINT_COUNT; ++i) {
-        if (i > 0) {
-            int ft_addr_start = i * 16;
-            int joint_type = fetch_approx_joint_types[i];
-
-            if (joint_type <= Z_PRISM) {
-                prism_fn(&fetch_approx_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col, joint_type);
-            }
-            else if (joint_type == X_ROT) {
-                xrot_fn(&fetch_approx_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
-            }
-            else if (joint_type == Y_ROT) {
-                yrot_fn(&fetch_approx_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
-            }
-            else if (joint_type == Z_ROT) {
-                zrot_fn(&fetch_approx_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
-            }
-
-            for (int r=0; r<4; r++){
-                T_col[r] = dot4_col(&T_base[r], T_step_col);
-            }
-        }
-
-        while (fetch_approx_sphere_to_joint[transformed_sphere_ind] == i) {
-            if (col_ind < 3) {
-                // sphere transformed_sphere_ind, robot batch_ind (16 robots), coord col_ind
-                sphere_pos_approx[transformed_sphere_ind * 16 * 3 + batch_ind * 3 + col_ind] = 
-                    T_base[col_ind] * fetch_approx_spheres_array[transformed_sphere_ind].x +
-                    T_base[col_ind + M] * fetch_approx_spheres_array[transformed_sphere_ind].y +
-                    T_base[col_ind + M*2] * fetch_approx_spheres_array[transformed_sphere_ind].z +
-                    T_base[col_ind + M*3];
-            }
-            transformed_sphere_ind++;
-        }
-    }
-}
-
-// 4 threads per discretized motion for self-collision check
-template <>
-__device__ bool self_collision_check_approx<ppln::robots::Fetch>(volatile float* sphere_pos_approx, volatile int* joint_in_collision, const int tid){
-    const int thread_ind = tid % 4;
-    const int batch_ind = tid / 4;
-
-    for (int i = thread_ind; i < FETCH_APPROX_SELF_CC_RANGE_COUNT; i+=4) {
-        int sphere_1_ind = fetch_approx_self_cc_ranges[i][0];
-        float sphere_1[3] = {
-            sphere_pos_approx[sphere_1_ind * 16 * 3 + batch_ind * 3 + 0],
-            sphere_pos_approx[sphere_1_ind * 16 * 3 + batch_ind * 3 + 1],
-            sphere_pos_approx[sphere_1_ind * 16 * 3 + batch_ind * 3 + 2]
-        };
-        for (int j = fetch_approx_self_cc_ranges[i][1]; j <= fetch_approx_self_cc_ranges[i][2]; j++) {
-            float sphere_2[3] = {
-                sphere_pos_approx[j * 16 * 3 + batch_ind * 3 + 0],
-                sphere_pos_approx[j * 16 * 3 + batch_ind * 3 + 1],
-                sphere_pos_approx[j * 16 * 3 + batch_ind * 3 + 2]
-            };
-            if (sphere_sphere_self_collision(
-                sphere_1[0], sphere_1[1], sphere_1[2], fetch_approx_spheres_array[sphere_1_ind].w,
-                sphere_2[0], sphere_2[1], sphere_2[2], fetch_approx_spheres_array[j].w
-            )){
-                atomicAdd((int*)&joint_in_collision[20*batch_ind + fetch_approx_sphere_to_joint[sphere_1_ind]], 1);
-                return false;
-            }
-        } 
-    }
-    return true;
-}
-
-// 4 threads per discretized motion for env collision check
-template <>
-__device__ bool env_collision_check_approx<ppln::robots::Fetch>(volatile float* sphere_pos_approx, volatile int* joint_in_collision, ppln::collision::Environment<float> *env, const int tid){
-    const int thread_ind = tid % 4;
-    const int batch_ind = tid / 4;
-    bool out = true;
     
-    #pragma unroll
-    for (int i=FETCH_APPROX_SPHERE_COUNT/4*thread_ind; i<FETCH_APPROX_SPHERE_COUNT/4*(thread_ind+1); i++){
-        // sphere i, robot batch_ind (16 robots)
-        if (sphere_environment_in_collision(
-            env,
-            sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 0],
-            sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 1],
-            sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 2],
-            fetch_approx_spheres_array[i].w
-        )) {
-            atomicAdd((int*)&joint_in_collision[20*batch_ind + fetch_approx_sphere_to_joint[i]],1);
-            out=false;
-        } 
-    }
-
-    int i = FETCH_APPROX_SPHERE_COUNT-1-thread_ind;
-    if (sphere_environment_in_collision(
-        env,
-        sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 0],
-        sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 1],
-        sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 2],
-        fetch_approx_spheres_array[i].w
-    )) {
-        atomicAdd((int*)&joint_in_collision[20*batch_ind + fetch_approx_sphere_to_joint[i]],1);
-        out=false;
-    }
-    return out;
-}
-}
