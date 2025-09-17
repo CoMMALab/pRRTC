@@ -524,6 +524,7 @@ namespace ppln::collision {
     template <typename Robot>
     __device__ __forceinline__ bool fkcc(volatile float *config, ppln::collision::Environment<float> *env, int tid);
 
+    /* adapted from https://github.com/NVlabs/curobo/blob/0a50de1ba72db304195d59d9d0b1ed269696047f/src/curobo/curobolib/cpp/kinematics_fused_kernel.cu */
     __device__ __forceinline__ void fixed_joint_fn(
         const float *fixed_transform,
         float *T_step_col
