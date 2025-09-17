@@ -180,6 +180,17 @@ namespace ppln::device_utils {
         { 0.054447f, 0.054447f, 0.1984f, 0.024f },
         { -0.054447f, -0.054447f, 0.1984f, 0.024f }
     };
+
+    __device__ __forceinline__ bool warp_any_active_mask(bool pred) {
+        // Active-lane mask: which threads are alive in this warp
+        unsigned mask = __activemask();
+        // Nonzero if any lane's pred is true
+        return __any_sync(mask , pred);
+    }
+
+    __device__ __forceinline__ bool warp_any_full_mask(bool pred) {
+        return __any_sync(0xffffffff , pred);
+    }
     
     /* math utils */
     __device__ __forceinline__ constexpr float dot_2(const float &ax, const float &ay, const float &bx, const float &by) 
@@ -677,3 +688,4 @@ namespace ppln::collision {
         return a_col[0] * b[0] + a_col[M] * b[1] + a_col[M*2] * b[2] + a_col[M*3] * b[3];
     }
 }
+

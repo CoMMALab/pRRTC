@@ -265,10 +265,10 @@ int main(int argc, char* argv[]) {
     std::string robot_name = "panda";
     std::string run_name;
     pRRTC_settings settings;
-    settings.num_new_configs = 512; // usually 512
+    settings.num_new_configs = 640; // usually 512
     settings.max_iters = 100000000;
     settings.granularity = 16;
-    settings.range = 0.5;
+    settings.range = 0.25;
     settings.balance = 2;
     settings.tree_ratio = 1.0;
     settings.dynamic_domain = true;

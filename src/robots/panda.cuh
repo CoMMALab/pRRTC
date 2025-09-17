@@ -1,326 +1,7 @@
 namespace ppln::collision {
-
-
-
-
-
-    #define PANDA_APPROX_SPHERE_COUNT 11
-    #define PANDA_APPROX_JOINT_COUNT 8
-    #define PANDA_APPROX_SELF_CC_RANGE_COUNT 5
-    #define FIXED -1
-    #define X_PRISM 0
-    #define Y_PRISM 1
-    #define Z_PRISM 2
-    #define X_ROT 3
-    #define Y_ROT 4
-    #define Z_ROT 5
-    #define BATCH_SIZE 16
-    
-    __device__ __constant__ float4 panda_approx_spheres_array[11] = {
-        { 0.0f, 0.0f, 0.05f, 0.08f },
-        { -0.001f, -0.039f, -0.085f, 0.154f },
-        { 0.0f, -0.085f, 0.04f, 0.154f },
-        { 0.039f, 0.028f, -0.052f, 0.128f },
-        { -0.042f, 0.049f, 0.029f, 0.126f },
-        { -0.001f, 0.037f, -0.11f, 0.176f },
-        { 0.042f, 0.014f, 0.0f, 0.095f },
-        { 0.015f, 0.015f, 0.075f, 0.072f },
-        { 0.0f, 0.0f, 0.129f, 0.104f },
-        { 0.054447f, 0.054447f, 0.1984f, 0.024f },
-        { -0.054447f, -0.054447f, 0.1984f, 0.024f }
-    };
-    
-    __device__ __constant__ float panda_approx_fixed_transforms[] = {
-        // joint 0
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 1.0, 0.0,
-        0.0, 0.0, 0.0, 1.0,
-        
-        // joint 1
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 1.0, 0.333,
-        0.0, 0.0, 0.0, 1.0,
-        
-        // joint 2
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, 1.0, 0.0,
-        0.0, -1.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 1.0,
-        
-        // joint 3
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, -1.0, -0.316,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 1.0,
-        
-        // joint 4
-        1.0, 0.0, 0.0, 0.0825,
-        0.0, 0.0, -1.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 1.0,
-        
-        // joint 5
-        1.0, 0.0, 0.0, -0.0825,
-        0.0, 0.0, 1.0, 0.384,
-        0.0, -1.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 1.0,
-        
-        // joint 6
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 0.0, -1.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 1.0,
-        
-        // joint 7
-        1.0, 0.0, 0.0, 0.088,
-        0.0, 0.0, -1.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 0.0, 1.0,
-        
-        
-    };
-    
-    __device__ __constant__ int panda_approx_sphere_to_joint[11] = {
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7,
-        7,
-        7,
-        7
-    };
-    
-    __device__ __constant__ int panda_approx_flattened_joint_to_spheres[19] = {
-        0,
-        -1,
-        1,
-        -1,
-        2,
-        -1,
-        3,
-        -1,
-        4,
-        -1,
-        5,
-        -1,
-        6,
-        -1,
-        7,
-        8,
-        9,
-        10,
-        -1
-    };
-    
-    __device__ __constant__ int panda_approx_joint_types[] = {
-        3,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5,
-        5
-    };
-    
-    __device__ __constant__ int panda_approx_self_cc_ranges[5][3] = {
-        { 0, 5, 10 },
-        { 1, 5, 10 },
-        { 2, 5, 5 },
-        { 2, 7, 10 },
-        { 5, 7, 10 }
-    };
-    
-    __device__ __constant__ int panda_approx_joint_parents[8] = {
-        0,
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
-    };
-    
-    __device__ __constant__ int panda_approx_T_memory_idx[8] = {
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
-    };
-    
-    __device__ __constant__ int panda_approx_dfs_order[8] = {
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7
-    };
-    
-    __device__ __constant__ int panda_approx_joint_id_to_dof[8] = {
-        -1,
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
-    };
-    
-    template <>
-    __device__ void fk_approx<ppln::robots::Panda>(
-        const float* q,
-        volatile float* sphere_pos_approx, // 11 spheres x 16 robots x 3 coordinates (each column is a robot)
-        float *T, // 16 robots x 1 x 4x4 transform matrix , column major
-        const int tid
-    )
-    {
-        // every 4 threads are responsible for one column of the transform matrix T
-        // make_transform will calculate the necessary column of T_step needed for the thread
-        const int col_ind = tid % 4;
-        const int batch_ind = tid / 4;
-    
-        int T_offset = batch_ind * 1 * 16;
-        float T_step_col[4]; // 4x1 column of the joint transform matrix for this thread
-        float *T_base = T + T_offset; // 4x4 transform matrix for the batch
-        
-        #pragma unroll
-        for (int i = 0; i < 1; ++i) {
-            float *T_col_i = T_base + i * 16 + col_ind * 4;
-            for (int r=0; r<4; r++) {
-                T_col_i[r] = 0.0f;
-            }
-            T_col_i[col_ind] = 1.0f;
-        }
-        __syncthreads();
-    
-        int joint_to_sphere_ind = 0;
-    
-        for (int j = 0; j < PANDA_APPROX_JOINT_COUNT; ++j) {
-            int i = panda_approx_dfs_order[j];
-            float T_col_tmp[4];
-            int parent_idx = panda_approx_joint_parents[i];
-            int T_memory_idx_parent = panda_approx_T_memory_idx[parent_idx];
-            int T_memory_idx = panda_approx_T_memory_idx[i];
-            int q_idx = panda_approx_joint_id_to_dof[i];
-            if (j > 0) {
-                int ft_addr_start = i * 16;
-                int joint_type = panda_approx_joint_types[i];
-    
-                if (joint_type <= Z_PRISM) {
-                    prism_fn(&panda_approx_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col, joint_type);
-                }
-                else if (joint_type == X_ROT) {
-                    xrot_fn(&panda_approx_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col);
-                }
-                else if (joint_type == Y_ROT) {
-                    yrot_fn(&panda_approx_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col);
-                }
-                else if (joint_type == Z_ROT) {
-                    zrot_fn(&panda_approx_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col);
-                }
-                
-                for (int r=0; r<4; r++){
-                    T_col_tmp[r] = dot4_col(&T_base[T_memory_idx_parent*16 + r], T_step_col);
-                }
-                for (int r=0; r<4; r++){
-                    T_base[T_memory_idx*16 + col_ind*4 + r] = T_col_tmp[r];
-                }
-            }
-            __syncwarp();
-            while (panda_approx_flattened_joint_to_spheres[joint_to_sphere_ind] != -1) {
-                int sphere_ind = panda_approx_flattened_joint_to_spheres[joint_to_sphere_ind];
-                if (col_ind < 3) {
-                    // sphere sphere_ind, robot batch_ind (BATCH_SIZE robots), coord col_ind
-                    sphere_pos_approx[sphere_ind * BATCH_SIZE * 3 + batch_ind * 3 + col_ind] = 
-                        T_base[T_memory_idx*16 + col_ind] * panda_approx_spheres_array[sphere_ind].x +
-                        T_base[T_memory_idx*16 + col_ind + M] * panda_approx_spheres_array[sphere_ind].y +
-                        T_base[T_memory_idx*16 + col_ind + M*2] * panda_approx_spheres_array[sphere_ind].z +
-                        T_base[T_memory_idx*16 + col_ind + M*3];
-                }
-                joint_to_sphere_ind++;
-            }
-            joint_to_sphere_ind++;
-            __syncthreads();
-        }
-    }
-    
-    // 4 threads per discretized motion for self-collision check
-    template <>
-    __device__ bool self_collision_check_approx<ppln::robots::Panda>(volatile float* sphere_pos_approx, volatile int* joint_in_collision, const int tid){
-        const int thread_ind = tid % 4;
-        const int batch_ind = tid / 4;
-        bool out = true;
-        for (int i = thread_ind; i < PANDA_APPROX_SELF_CC_RANGE_COUNT; i+=4) {
-            int sphere_1_ind = panda_approx_self_cc_ranges[i][0];
-            float sphere_1[3] = {
-                sphere_pos_approx[sphere_1_ind * BATCH_SIZE * 3 + batch_ind * 3 + 0],
-                sphere_pos_approx[sphere_1_ind * BATCH_SIZE * 3 + batch_ind * 3 + 1],
-                sphere_pos_approx[sphere_1_ind * BATCH_SIZE * 3 + batch_ind * 3 + 2]
-            };
-            for (int j = panda_approx_self_cc_ranges[i][1]; j <= panda_approx_self_cc_ranges[i][2]; j++) {
-                float sphere_2[3] = {
-                    sphere_pos_approx[j * BATCH_SIZE * 3 + batch_ind * 3 + 0],
-                    sphere_pos_approx[j * BATCH_SIZE * 3 + batch_ind * 3 + 1],
-                    sphere_pos_approx[j * BATCH_SIZE * 3 + batch_ind * 3 + 2]
-                };
-                if (sphere_sphere_self_collision(
-                    sphere_1[0], sphere_1[1], sphere_1[2], panda_approx_spheres_array[sphere_1_ind].w,
-                    sphere_2[0], sphere_2[1], sphere_2[2], panda_approx_spheres_array[j].w
-                )){
-                    atomicAdd((int*)&joint_in_collision[20*batch_ind + panda_approx_sphere_to_joint[sphere_1_ind]], 1);
-                    out = false;
-                }
-            } 
-        }
-        return out;
-    }
-    
-    // 4 threads per discretized motion for env collision check
-    template <>
-    __device__ bool env_collision_check_approx<ppln::robots::Panda>(volatile float* sphere_pos_approx, volatile int* joint_in_collision, ppln::collision::Environment<float> *env, const int tid){
-        const int thread_ind = tid % 4;
-        const int batch_ind = tid / 4;
-        bool out = true;
-    
-        for (int i = thread_ind; i < PANDA_APPROX_SPHERE_COUNT; i += 4){
-            // sphere i, robot batch_ind (32 robots)
-            if ( 
-                sphere_environment_in_collision(
-                    env,
-                    sphere_pos_approx[i * BATCH_SIZE * 3 + batch_ind * 3 + 0],
-                    sphere_pos_approx[i * BATCH_SIZE * 3 + batch_ind * 3 + 1],
-                    sphere_pos_approx[i * BATCH_SIZE * 3 + batch_ind * 3 + 2],
-                    panda_approx_spheres_array[i].w
-                )
-            ) {
-                atomicAdd((int*)&joint_in_collision[20*batch_ind + panda_approx_sphere_to_joint[i]],1);
-                out = false;
-            } 
-        }
-        return out;
-    }
-    
-    
-    
-    
     #define PANDA_SPHERE_COUNT 59
     #define PANDA_JOINT_COUNT 8
-    #define PANDA_SELF_CC_RANGE_COUNT 25
+    #define PANDA_SELF_CC_RANGE_COUNT 24
     #define FIXED -1
     #define X_PRISM 0
     #define Y_PRISM 1
@@ -329,7 +10,7 @@ namespace ppln::collision {
     #define Y_ROT 4
     #define Z_ROT 5
     #define BATCH_SIZE 16
-    
+
     __device__ __constant__ float4 panda_spheres_array[59] = {
         { 0.0f, 0.0f, 0.05f, 0.08f },
         { 0.0f, -0.08f, 0.0f, 0.06f },
@@ -391,7 +72,7 @@ namespace ppln::collision {
         { -0.056569f, -0.056569f, 0.1874f, 0.012f },
         { -0.051619f, -0.051619f, 0.2094f, 0.012f }
     };
-    
+
     __device__ __constant__ float panda_fixed_transforms[] = {
         // joint 0
         1.0, 0.0, 0.0, 0.0,
@@ -443,8 +124,8 @@ namespace ppln::collision {
         
         
     };
-    
-    __device__ __constant__ int panda_sphere_to_joint[59] = {
+
+    __device__ __constant__ int panda_sphere_to_joint[] = {
         0,
         1,
         1,
@@ -505,77 +186,7 @@ namespace ppln::collision {
         7,
         7
     };
-    
-    __device__ __constant__ int panda_flattened_joint_to_spheres[67] = {
-        0,
-        -1,
-        1,
-        2,
-        3,
-        4,
-        -1,
-        5,
-        6,
-        7,
-        8,
-        -1,
-        9,
-        10,
-        11,
-        12,
-        -1,
-        13,
-        14,
-        15,
-        16,
-        -1,
-        17,
-        18,
-        19,
-        20,
-        21,
-        22,
-        23,
-        24,
-        25,
-        26,
-        27,
-        28,
-        -1,
-        29,
-        30,
-        31,
-        -1,
-        32,
-        33,
-        34,
-        35,
-        36,
-        37,
-        38,
-        39,
-        40,
-        41,
-        42,
-        43,
-        44,
-        45,
-        46,
-        47,
-        48,
-        49,
-        50,
-        51,
-        52,
-        53,
-        54,
-        55,
-        56,
-        57,
-        58,
-        -1
-    };
-    
+
     __device__ __constant__ int panda_joint_types[] = {
         3,
         5,
@@ -586,8 +197,8 @@ namespace ppln::collision {
         5,
         5
     };
-    
-    __device__ __constant__ int panda_self_cc_ranges[25][3] = {
+
+    __device__ __constant__ int panda_self_cc_ranges[24][3] = {
         { 0, 17, 58 },
         { 1, 17, 58 },
         { 2, 17, 58 },
@@ -611,59 +222,14 @@ namespace ppln::collision {
         { 24, 32, 58 },
         { 25, 32, 58 },
         { 26, 32, 58 },
-        { 27, 32, 58 },
-        { 28, 32, 58 }
+        { 27, 32, 58 }
     };
-    
-    __device__ __constant__ int panda_joint_parents[8] = {
-        0,
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
-    };
-    
-    __device__ __constant__ int panda_T_memory_idx[8] = {
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
-    };
-    
-    __device__ __constant__ int panda_dfs_order[8] = {
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6,
-        7
-    };
-    
-    __device__ __constant__ int panda_joint_id_to_dof[8] = {
-        -1,
-        0,
-        1,
-        2,
-        3,
-        4,
-        5,
-        6
-    };
-    
+
     template <>
     __device__ void fk<ppln::robots::Panda>(
         const float* q,
-        volatile float* sphere_pos, // 59 spheres x 16 robots x 3 coordinates (each column is a robot)
-        float *T, // 16 robots x 1 x 4x4 transform matrix , column major
+        volatile float* sphere_pos, // 59 spheres x 16 robots x 3 coordinates
+        float *T, // 16 robots x 4x4 transform matrix
         const int tid
     )
     {
@@ -671,79 +237,64 @@ namespace ppln::collision {
         // make_transform will calculate the necessary column of T_step needed for the thread
         const int col_ind = tid % 4;
         const int batch_ind = tid / 4;
-    
-        int T_offset = batch_ind * 1 * 16;
+        int transformed_sphere_ind = 0;
+
+        int T_offset = batch_ind * 16;
         float T_step_col[4]; // 4x1 column of the joint transform matrix for this thread
         float *T_base = T + T_offset; // 4x4 transform matrix for the batch
-        
-        #pragma unroll
-        for (int i = 0; i < 1; ++i) {
-            float *T_col_i = T_base + i * 16 + col_ind * 4;
-            for (int r=0; r<4; r++) {
-                T_col_i[r] = 0.0f;
-            }
-            T_col_i[col_ind] = 1.0f;
+        float *T_col = T_base + col_ind*4; // 1x4 column (column major) of the transform matrix for this thread
+
+        for (int r=0; r<4; r++){
+            T_col[r] = 0;
         }
-        __syncthreads();
-    
-        int joint_to_sphere_ind = 0;
-    
-        for (int j = 0; j < PANDA_JOINT_COUNT; ++j) {
-            int i = panda_dfs_order[j];
-            float T_col_tmp[4];
-            int parent_idx = panda_joint_parents[i];
-            int T_memory_idx_parent = panda_T_memory_idx[parent_idx];
-            int T_memory_idx = panda_T_memory_idx[i];
-            int q_idx = panda_joint_id_to_dof[i];
-            if (j > 0) {
+        T_col[col_ind] = 1;
+
+        // loop through each joint, accumulate transformation matrix, and update sphere positions
+        for (int i = 0; i < PANDA_JOINT_COUNT; ++i) {
+            if (i > 0) {
                 int ft_addr_start = i * 16;
                 int joint_type = panda_joint_types[i];
-    
-                if (joint_type <= Z_PRISM) {
-                    prism_fn(&panda_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col, joint_type);
+                if (joint_type <= X_PRISM) {
+                    prism_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col, joint_type);
                 }
                 else if (joint_type == X_ROT) {
-                    xrot_fn(&panda_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col);
+                    xrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
                 }
-                else if (joint_type == Y_ROT) {
-                    yrot_fn(&panda_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col);
+                else if (joint_type == Y_ROT) { 
+                    yrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
                 }
                 else if (joint_type == Z_ROT) {
-                    zrot_fn(&panda_fixed_transforms[ft_addr_start], q[q_idx], col_ind, T_step_col);
+                    zrot_fn(&panda_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
                 }
-                
+
                 for (int r=0; r<4; r++){
-                    T_col_tmp[r] = dot4_col(&T_base[T_memory_idx_parent*16 + r], T_step_col);
-                }
-                for (int r=0; r<4; r++){
-                    T_base[T_memory_idx*16 + col_ind*4 + r] = T_col_tmp[r];
+                    T_col[r] = dot4_col(&T_base[r], T_step_col);
                 }
             }
-            __syncwarp();
-            while (panda_flattened_joint_to_spheres[joint_to_sphere_ind] != -1) {
-                int sphere_ind = panda_flattened_joint_to_spheres[joint_to_sphere_ind];
+
+            while (panda_sphere_to_joint[transformed_sphere_ind]==i) {
                 if (col_ind < 3) {
-                    // sphere sphere_ind, robot batch_ind (BATCH_SIZE robots), coord col_ind
-                    sphere_pos[sphere_ind * BATCH_SIZE * 3 + batch_ind * 3 + col_ind] = 
-                        T_base[T_memory_idx*16 + col_ind] * panda_spheres_array[sphere_ind].x +
-                        T_base[T_memory_idx*16 + col_ind + M] * panda_spheres_array[sphere_ind].y +
-                        T_base[T_memory_idx*16 + col_ind + M*2] * panda_spheres_array[sphere_ind].z +
-                        T_base[T_memory_idx*16 + col_ind + M*3];
+                    // sphere transformed_sphere_ind, robot batch_ind (16 robots), coord col_ind
+                    sphere_pos[transformed_sphere_ind * 16 * 3 + batch_ind * 3 + col_ind] = 
+                        T_base[col_ind] * panda_spheres_array[transformed_sphere_ind].x +
+                        T_base[col_ind + M] * panda_spheres_array[transformed_sphere_ind].y +
+                        T_base[col_ind + M*2] * panda_spheres_array[transformed_sphere_ind].z +
+                        T_base[col_ind + M*3];
                 }
-                joint_to_sphere_ind++;
+                transformed_sphere_ind++;
             }
-            joint_to_sphere_ind++;
-            __syncthreads();
         }
     }
-    
+
     // 4 threads per discretized motion for self-collision check
     template <>
     __device__ bool self_collision_check<ppln::robots::Panda>(volatile float* sphere_pos, volatile int* joint_in_collision, const int tid){
         const int thread_ind = tid % 4;
         const int batch_ind = tid / 4;
-    
+        bool has_collision = false;
+
         for (int i = thread_ind; i < PANDA_SELF_CC_RANGE_COUNT; i += 4) {
+            if (warp_any_active_mask(has_collision)) return false;
             int sphere_1_ind = panda_self_cc_ranges[i][0];
             if (joint_in_collision[20*batch_ind + panda_sphere_to_joint[sphere_1_ind]] == 0) continue;
             float sphere_1[3] = {
@@ -761,21 +312,23 @@ namespace ppln::collision {
                     sphere_1[0], sphere_1[1], sphere_1[2], panda_spheres_array[sphere_1_ind].w,
                     sphere_2[0], sphere_2[1], sphere_2[2], panda_spheres_array[j].w
                 )){
-                    return false;
+                    //return false;
+                    has_collision=true;
                 }
             }
         }
-        return true;
-    
+        return !has_collision;
+
     }
-    
+
     // 4 threads per discretized motion for env collision check
     template <>
     __device__ bool env_collision_check<ppln::robots::Panda>(volatile float* sphere_pos, volatile int* joint_in_collision, ppln::collision::Environment<float> *env, const int tid){
         const int thread_ind = tid % 4;
         const int batch_ind = tid / 4;
-    
-        for (int i = thread_ind; i < PANDA_SPHERE_COUNT; i += 4){
+        bool has_collision=false;
+
+        for (int i = PANDA_SPHERE_COUNT-1-thread_ind; i >=PANDA_SPHERE_COUNT%4; i -= 4){
             // sphere i, robot batch_ind (16 robots)
             if (joint_in_collision[20*batch_ind + panda_sphere_to_joint[i]] > 0 && 
                 sphere_environment_in_collision(
@@ -786,10 +339,269 @@ namespace ppln::collision {
                     panda_spheres_array[i].w
                 )
             ) {
-                return false;
+                has_collision=true;
+                //return false;
             } 
+            if (warp_any_full_mask(has_collision)) return false;
         }
-        return true;
+
+        int i=thread_ind;
+        if (joint_in_collision[20*batch_ind + panda_sphere_to_joint[i]] > 0 && 
+            sphere_environment_in_collision(
+                env,
+                sphere_pos[i * BATCH_SIZE * 3 + batch_ind * 3 + 0],
+                sphere_pos[i * BATCH_SIZE * 3 + batch_ind * 3 + 1],
+                sphere_pos[i * BATCH_SIZE * 3 + batch_ind * 3 + 2],
+                panda_spheres_array[i].w
+            )
+        ) {
+            has_collision=true;
+            //return false;
+        } 
+
+        return !has_collision;
     }
-    }
+
+
+
+
+
+
+#define PANDA_APPROX_SPHERE_COUNT 11
+#define PANDA_APPROX_JOINT_COUNT 8
+#define PANDA_APPROX_SELF_CC_RANGE_COUNT 4
+#define FIXED -1
+#define X_PRISM 0
+#define Y_PRISM 1
+#define Z_PRISM 2
+#define X_ROT 3
+#define Y_ROT 4
+#define Z_ROT 5
+
+__device__ __constant__ float4 panda_approx_spheres_array[11] = {
+    { 0.0f, 0.0f, 0.05f, 0.08f },
+    { -0.001f, -0.039f, -0.085f, 0.154f },
+    { 0.0f, -0.085f, 0.04f, 0.154f },
+    { 0.039f, 0.028f, -0.052f, 0.128f },
+    { -0.042f, 0.049f, 0.029f, 0.126f },
+    { -0.001f, 0.037f, -0.11f, 0.176f },
+    { 0.042f, 0.014f, 0.0f, 0.095f },
+    { 0.015f, 0.015f, 0.075f, 0.072f },
+    { 0.0f, 0.0f, 0.129f, 0.104f },
+    { 0.054447f, 0.054447f, 0.1984f, 0.024f },
+    { -0.054447f, -0.054447f, 0.1984f, 0.024f }
+};
+
+__device__ __constant__ float panda_approx_fixed_transforms[] = {
+    // joint 0
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 1.0, 0.0,
+    0.0, 0.0, 0.0, 1.0,
     
+    // joint 1
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 1.0, 0.333,
+    0.0, 0.0, 0.0, 1.0,
+    
+    // joint 2
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 0.0, 1.0, 0.0,
+    0.0, -1.0, 0.0, 0.0,
+    0.0, 0.0, 0.0, 1.0,
+    
+    // joint 3
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 0.0, -1.0, -0.316,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 0.0, 1.0,
+    
+    // joint 4
+    1.0, 0.0, 0.0, 0.0825,
+    0.0, 0.0, -1.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 0.0, 1.0,
+    
+    // joint 5
+    1.0, 0.0, 0.0, -0.0825,
+    0.0, 0.0, 1.0, 0.384,
+    0.0, -1.0, 0.0, 0.0,
+    0.0, 0.0, 0.0, 1.0,
+    
+    // joint 6
+    1.0, 0.0, 0.0, 0.0,
+    0.0, 0.0, -1.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 0.0, 1.0,
+    
+    // joint 7
+    1.0, 0.0, 0.0, 0.088,
+    0.0, 0.0, -1.0, 0.0,
+    0.0, 1.0, 0.0, 0.0,
+    0.0, 0.0, 0.0, 1.0,
+    
+    
+};
+
+__device__ __constant__ int panda_approx_sphere_to_joint[] = {
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    7,
+    7,
+    7
+};
+
+__device__ __constant__ int panda_approx_joint_types[] = {
+    3,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5,
+    5
+};
+
+__device__ __constant__ int panda_approx_self_cc_ranges[4][3] = {
+    { 0, 5, 10 },
+    { 1, 5, 10 },
+    { 2, 5, 5 },
+    { 2, 7, 10 }
+};
+
+template <>
+__device__ void fk_approx<ppln::robots::Panda>(
+    const float* q,
+    volatile float* sphere_pos_approx, // 11 spheres x 16 robots x 3 coordinates (each column is a robot)
+    float *T, // 16 robots x 4x4 transform matrix , column major
+    const int tid
+)
+{
+    // every 4 threads are responsible for one column of the transform matrix T
+    // make_transform will calculate the necessary column of T_step needed for the thread
+    const int col_ind = tid % 4;
+    const int batch_ind = tid / 4;
+    int transformed_sphere_ind = 0;
+
+    int T_offset = batch_ind * 16;
+    float T_step_col[4]; // 4x1 column of the joint transform matrix for this thread
+    float *T_base = T + T_offset; // 4x4 transform matrix for the batch
+    float *T_col = T_base + col_ind*4; // 1x4 column (column major) of the transform matrix for this thread
+
+    for (int r=0; r<4; r++){
+        T_col[r] = 0;
+    }
+    T_col[col_ind] = 1;
+
+    // loop through each joint, accumulate transformation matrix, and update sphere positions
+    for (int i = 0; i < PANDA_APPROX_JOINT_COUNT; ++i) {
+        if (i > 0) {
+            int ft_addr_start = i * 16;
+            int joint_type = panda_approx_joint_types[i];
+
+            if (joint_type <= X_PRISM) {
+                prism_fn(&panda_approx_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col, joint_type);
+            }
+            else if (joint_type == X_ROT) {
+                xrot_fn(&panda_approx_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
+            }
+            else if (joint_type == Y_ROT) {
+                yrot_fn(&panda_approx_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
+            }
+            else if (joint_type == Z_ROT) {
+                zrot_fn(&panda_approx_fixed_transforms[ft_addr_start], q[i - 1], col_ind, T_step_col);
+            }
+
+            for (int r=0; r<4; r++){
+                T_col[r] = dot4_col(&T_base[r], T_step_col);
+            }
+        }
+
+        while (panda_approx_sphere_to_joint[transformed_sphere_ind] == i) {
+            if (col_ind < 3) {
+                // sphere transformed_sphere_ind, robot batch_ind (16 robots), coord col_ind
+                sphere_pos_approx[transformed_sphere_ind * 16 * 3 + batch_ind * 3 + col_ind] = 
+                    T_base[col_ind] * panda_approx_spheres_array[transformed_sphere_ind].x +
+                    T_base[col_ind + M] * panda_approx_spheres_array[transformed_sphere_ind].y +
+                    T_base[col_ind + M*2] * panda_approx_spheres_array[transformed_sphere_ind].z +
+                    T_base[col_ind + M*3];
+            }
+            transformed_sphere_ind++;
+        }
+    }
+}
+
+// 4 threads per discretized motion for self-collision check
+template <>
+__device__ bool self_collision_check_approx<ppln::robots::Panda>(volatile float* sphere_pos_approx, volatile int* joint_in_collision, const int tid){
+    const int thread_ind = tid % 4;
+    const int batch_ind = tid / 4;
+
+    for (int i = thread_ind; i < PANDA_APPROX_SELF_CC_RANGE_COUNT; i+=4) {
+        int sphere_1_ind = panda_approx_self_cc_ranges[i][0];
+        float sphere_1[3] = {
+            sphere_pos_approx[sphere_1_ind * 16 * 3 + batch_ind * 3 + 0],
+            sphere_pos_approx[sphere_1_ind * 16 * 3 + batch_ind * 3 + 1],
+            sphere_pos_approx[sphere_1_ind * 16 * 3 + batch_ind * 3 + 2]
+        };
+        for (int j = panda_approx_self_cc_ranges[i][1]; j <= panda_approx_self_cc_ranges[i][2]; j++) {
+            float sphere_2[3] = {
+                sphere_pos_approx[j * 16 * 3 + batch_ind * 3 + 0],
+                sphere_pos_approx[j * 16 * 3 + batch_ind * 3 + 1],
+                sphere_pos_approx[j * 16 * 3 + batch_ind * 3 + 2]
+            };
+            if (sphere_sphere_self_collision(
+                sphere_1[0], sphere_1[1], sphere_1[2], panda_approx_spheres_array[sphere_1_ind].w,
+                sphere_2[0], sphere_2[1], sphere_2[2], panda_approx_spheres_array[j].w
+            )){
+                atomicAdd((int*)&joint_in_collision[20*batch_ind + panda_approx_sphere_to_joint[sphere_1_ind]], 1);
+                return false;
+            }
+        } 
+    }
+    return true;
+}
+
+// 4 threads per discretized motion for env collision check
+template <>
+__device__ bool env_collision_check_approx<ppln::robots::Panda>(volatile float* sphere_pos_approx, volatile int* joint_in_collision, ppln::collision::Environment<float> *env, const int tid){
+    const int thread_ind = tid % 4;
+    const int batch_ind = tid / 4;
+    bool out = true;
+    
+    #pragma unroll
+    for (int i=PANDA_APPROX_SPHERE_COUNT/4*thread_ind; i<PANDA_APPROX_SPHERE_COUNT/4*(thread_ind+1); i++){
+        // sphere i, robot batch_ind (16 robots)
+        if (sphere_environment_in_collision(
+            env,
+            sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 0],
+            sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 1],
+            sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 2],
+            panda_approx_spheres_array[i].w
+        )) {
+            atomicAdd((int*)&joint_in_collision[20*batch_ind + panda_approx_sphere_to_joint[i]],1);
+            out=false;
+        } 
+    }
+
+    int i = PANDA_APPROX_SPHERE_COUNT-1-thread_ind;
+    if (sphere_environment_in_collision(
+        env,
+        sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 0],
+        sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 1],
+        sphere_pos_approx[i * 16 * 3 + batch_ind * 3 + 2],
+        panda_approx_spheres_array[i].w
+    )) {
+        atomicAdd((int*)&joint_in_collision[20*batch_ind + panda_approx_sphere_to_joint[i]],1);
+        out=false;
+    }
+    return out;
+}
+}

@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.16...3.22)
 
 find_program(CLANGPP "clang++")
+find_package(CUDAToolkit REQUIRED)
 set(CMAKE_CXX_COMPILER ${CLANGPP} CACHE STRING "C++ compiler" FORCE)
 
 include(FetchContent)
@@ -105,6 +106,7 @@ target_link_libraries(evaluate_mbm
     PRIVATE
     nlohmann_json::nlohmann_json
     Eigen3::Eigen
+    CUDA::cudart
 )
 
 target_compile_options(evaluate_mbm PRIVATE
@@ -129,6 +131,7 @@ target_include_directories(single_mbm
     ${CMAKE_CURRENT_SOURCE_DIR}/extern/vamp/src/impl
     ${CMAKE_CURRENT_SOURCE_DIR}/build/_deps/nigh-src/src
     ${CMAKE_CURRENT_SOURCE_DIR}/extern/pdqsort
+    ${CUDAToolkit_INCLUDE_DIRS}
 )
 
 target_link_libraries(single_mbm
@@ -165,3 +168,4 @@ target_link_libraries(validate_configs
 target_compile_options(validate_configs PRIVATE
     -Wno-c++11-narrowing
 )
+

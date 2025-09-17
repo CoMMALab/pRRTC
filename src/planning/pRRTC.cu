@@ -345,7 +345,7 @@ namespace pRRTC {
         __align__(16) __shared__ volatile float sphere_pos[6000]; // ~assuming max 120 spheres with granularity 32, each has x y z coordinates
         __align__(16) __shared__ volatile float sphere_pos_approx[2500]; // ~assuming 50 spheres with granularity 32, each has x y z coordinates
         __align__(16) __shared__ volatile int link_CC[640]; //assuming max granularity 32, max number of links 20
-        __align__(16) __shared__ float T[16 * 1 * 16]; // 32 robots x 2x4x4 transform matrix
+        __align__(16) __shared__ float T[16 * 2 * 16]; // 32 robots x 2x4x4 transform matrix
 
         int iter = 0;
 
