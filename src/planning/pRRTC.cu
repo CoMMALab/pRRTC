@@ -6,6 +6,7 @@
 #include "src/robots/panda.cuh"
 #include "src/robots/fetch.cuh"
 #include "src/robots/baxter.cuh"
+#include "src/robots/ur5.cuh"
 
 #include <curand.h>
 #include <curand_kernel.h>
@@ -926,5 +927,5 @@ namespace pRRTC {
     template PlannerResult<typename ppln::robots::Panda> solve<ppln::robots::Panda>(std::array<float, 7>&, std::vector<std::array<float, 7>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
     template PlannerResult<typename ppln::robots::Fetch> solve<ppln::robots::Fetch>(std::array<float, 8>&, std::vector<std::array<float, 8>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
     template PlannerResult<typename ppln::robots::Baxter> solve<ppln::robots::Baxter>(std::array<float, 14>&, std::vector<std::array<float, 14>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
-
+    template PlannerResult<typename ppln::robots::Ur5> solve<ppln::robots::Ur5>(std::array<float, 6>&, std::vector<std::array<float, 6>>&, ppln::collision::Environment<float>&, pRRTC_settings&);
 }
