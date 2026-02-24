@@ -1,7 +1,6 @@
 build
 problems.pkl
 *.out
-*.json
 *.sqlite
 *.nsys-rep
 Pipfile
