@@ -113,11 +113,11 @@ If you find our work useful, please cite:
 
 ```bibtex
 @inproceedings{huang2026prrtc,
-title={pRRTC: GPU-Parallel RRT-Connect for Fast, Consistent, and Low-Cost Motion Planning},
-author={Huang, Chih H and Jadhav, Pranav and Plancher, Brian and Kingston, Zachary},
-booktitle={2026 IEEE International Conference on Robotics and Automation (ICRA)},
-year={2026},
-organization={IEEE}
+    title={pRRTC: GPU-Parallel RRT-Connect for Fast, Consistent, and Low-Cost Motion Planning},
+    author={Huang, Chih H and Jadhav, Pranav and Plancher, Brian and Kingston, Zachary},
+    booktitle={2026 IEEE International Conference on Robotics and Automation (ICRA)},
+    year={2026},
+    organization={IEEE}
 }
 ```
 
