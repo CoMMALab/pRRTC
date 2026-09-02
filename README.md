@@ -107,5 +107,19 @@ Make sure to reference the approximate urdf. Batch size should be equal to the n
     b. copy the generated struct into `src/planning/Robots.hh`.
 11. Recompile pRRTC.
 
+## Citation
+
+If you find our work useful, please cite:
+
+```bibtex
+@inproceedings{huang2026prrtc,
+title={pRRTC: GPU-Parallel RRT-Connect for Fast, Consistent, and Low-Cost Motion Planning},
+author={Huang, Chih H and Jadhav, Pranav and Plancher, Brian and Kingston, Zachary},
+booktitle={2026 IEEE International Conference on Robotics and Automation (ICRA)},
+year={2026},
+organization={IEEE}
+}
+```
+
 ## Funding Acknowledgement
 This material is based upon work supported by the National Science Foundation (under Award [2411369](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2411369)). Any opinions, findings, conclusions, or recommendations expressed in this material are those of the authors and do not necessarily reflect those of the funding organizations.
