@@ -185,6 +185,8 @@ int main(int argc, char* argv[]) {
         run_planning<robots::Panda>(problems, settings, run_name, robot_name);
     } else if (robot_name == "baxter") {
         run_planning<robots::Baxter>(problems, settings, run_name, robot_name);
+    } else if (robot_name == "ur5") {
+        run_planning<robots::Ur5>(problems, settings, run_name, robot_name);
     } else {
         std::cerr << "Unsupported robot type: " << robot_name << "\n";
         return 1;
